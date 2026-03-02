@@ -5,7 +5,7 @@
         <div class="auth-card card-inner fade-in wide-card">
             <header class="auth-header">
                 <div class="logo-orb emerald">✨</div>
-                <h1 class="main-title">Nueva Cuenta </h1>
+                <h1 class="main-title">Nueva <span>Cuenta</span></h1>
                 <p class="subtitle">Únete a la hermandad de duelistas</p>
             </header>
 
@@ -40,7 +40,7 @@
 
                 <div class="legal-box">
                     <label class="custom-checkbox">
-                        <input type="checkbox" v-model="acceptTerms" required />
+                        <input type="checkbox" v-model="acceptTerms" class="hidden-checkbox" required />
                         <span class="checkmark"></span>
                         <span class="legal-text">Acepto la política de privacidad y cookies</span>
                     </label>
@@ -76,6 +76,11 @@ const acceptTerms = ref(false)
 const loading = ref(false)
 
 const handleRegister = async () => {
+    if (!acceptTerms.value) {
+        alert("Debes aceptar los términos.");
+        return;
+    }
+
     loading.value = true
     try {
         const { data, error } = await supabase.auth.signUp({
@@ -88,21 +93,22 @@ const handleRegister = async () => {
                 }
             }
         })
+
         if (error) throw error
-        alert('¡Registro casi completado! Revisa tu email o entra directamente si desactivaste la confirmación.')
+
+        alert('¡Invocación exitosa! Revisa tu email para confirmar la cuenta.')
         router.push('/login')
     } catch (error) {
-        alert(error.message)
+        alert('Error en la forja: ' + error.message)
     } finally {
         loading.value = false
     }
 }
 </script>
+
 <style scoped>
-/* 1. ELIMINAR BORDES Y ASEGURAR COBERTURA TOTAL */
 .auth-viewport {
     position: fixed;
-    /* Ocupa toda la pantalla sin importar el scroll del body */
     top: 0;
     left: 0;
     width: 100vw;
@@ -111,11 +117,9 @@ const handleRegister = async () => {
     align-items: center;
     justify-content: center;
     background: #020617;
-    /* Color base sólido para evitar fugas */
     background: radial-gradient(circle at center, #064e3b 0%, #020617 100%);
     z-index: 1000;
     overflow-y: auto;
-    /* Permite scroll si el móvil es muy pequeño */
     padding: 20px;
 }
 
@@ -131,7 +135,6 @@ const handleRegister = async () => {
     pointer-events: none;
 }
 
-/* 2. CARD REIMAGINADA */
 .wide-card {
     max-width: 550px;
     width: 100%;
@@ -143,12 +146,11 @@ const handleRegister = async () => {
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }
 
-/* 3. INPUTS CON ESTILO (ADIÓS A LO HORRIBLE) */
 .form-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 25px;
-    margin-bottom: 25px;
+    gap: 20px;
+    margin-bottom: 20px;
 }
 
 .field-label {
@@ -159,7 +161,6 @@ const handleRegister = async () => {
     letter-spacing: 1.5px;
     margin-bottom: 10px;
     text-align: left;
-    opacity: 0.8;
 }
 
 .input-wrapper {
@@ -172,9 +173,7 @@ const handleRegister = async () => {
     left: 14px;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 1rem;
     z-index: 2;
-    pointer-events: none;
 }
 
 .glass-input {
@@ -184,81 +183,61 @@ const handleRegister = async () => {
     border-radius: 12px;
     padding: 12px 12px 12px 42px;
     color: #fff;
-    font-size: 0.9rem;
-    transition: all 0.3s ease;
+    transition: 0.3s;
 }
 
 .glass-input:focus {
     outline: none;
     border-color: #10b981 !important;
     background: rgba(0, 0, 0, 0.5) !important;
-    box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
 }
 
-/* Evitar que el autofill de Google Chrome rompa el estilo */
-.glass-input:-webkit-autofill {
-    -webkit-text-fill-color: white !important;
-    -webkit-box-shadow: 0 0 0px 1000px #0f172a inset !important;
-    transition: background-color 5000s ease-in-out 0s;
-}
-
-/* 4. ELEMENTOS DE CONTROL */
-.legal-box {
-    background: rgba(255, 255, 255, 0.03);
-    padding: 12px;
-    border-radius: 10px;
-    margin-bottom: 25px;
+/* ESTILOS DEL CHECKBOX - AQUÍ ESTABA EL ERROR */
+.hidden-checkbox {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
 }
 
 .custom-checkbox {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     cursor: pointer;
-    text-align: left;
+    position: relative;
 }
 
 .checkmark {
     width: 20px;
     height: 20px;
+    background: rgba(0, 0, 0, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 6px;
-    /* Un poco más redondeado queda mejor */
-    background: rgba(0, 0, 0, 0.3);
+    display: inline-block;
+    transition: 0.3s;
     flex-shrink: 0;
-    transition: all 0.2s ease;
 }
 
-.custom-checkbox input:checked+.checkmark {
-    background: #10b981;
+.hidden-checkbox:checked+.checkmark {
+    background-color: #10b981;
     border-color: #10b981;
-    /* Usamos solo el SVG como fondo, es más limpio */
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
-    background-size: 12px;
+    background-size: 14px;
     background-repeat: no-repeat;
     background-position: center;
-}
-
-.custom-checkbox input:checked+.checkmark::after {
-    content: none !important;
-    /* Esto elimina el check de texto */
 }
 
 .legal-text {
     font-size: 0.75rem;
     color: #94a3b8;
-    line-height: 1.2;
+    text-align: left;
 }
 
-/* RESPONSIVE */
 @media (max-width: 580px) {
     .form-grid {
         grid-template-columns: 1fr;
-        gap: 10px;
-    }
-
-    .auth-card {
-        padding: 25px 20px;
     }
 }
 </style>
