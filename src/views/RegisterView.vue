@@ -89,7 +89,7 @@ const handleRegister = async () => {
             }
         })
         if (error) throw error
-        alert('¡Registro casi completado! Revisa tu email para confirmar tu cuenta.')
+        alert('¡Registro casi completado! Revisa tu email o entra directamente si desactivaste la confirmación.')
         router.push('/login')
     } catch (error) {
         alert(error.message)
@@ -98,7 +98,6 @@ const handleRegister = async () => {
     }
 }
 </script>
-
 <style scoped>
 /* 1. ELIMINAR BORDES Y ASEGURAR COBERTURA TOTAL */
 .auth-viewport {
