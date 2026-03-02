@@ -18,8 +18,10 @@ jobs:
           npm install
           npm run build
         env:
-          # Mapeo de secretos: 'Lado Izquierdo' es como lo llamas en Vue,
-          # 'Lado Derecho' es como lo llamaste en la captura de GitHub.
+          # Estas son las variables críticas para que Supabase funcione en la web desplegada
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Mantengo estas por si aún usas alguna referencia, pero podrías quitarlas si ya todo es Supabase
           VITE_SHEET_URL_Alvaro: ${{ secrets.VITE_SHEET_URL_ALVARO }}
           VITE_SHEET_URL_Hector: ${{ secrets.VITE_SHEET_URL_HECTOR }}
 
