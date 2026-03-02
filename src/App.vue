@@ -1,38 +1,30 @@
-<script setup>
-import { ref } from 'vue';
-import Home from './components/Home.vue';
-import Stats from './components/Stats.vue';
-
-// Estado de navegación
-const pantallaActual = ref('home');
-const sesionActiva = ref({ jugadorId: '', nombre: '', formato: '' });
-
-function navegarAStats(data) {
-  sesionActiva.value = data;
-  pantallaActual.value = 'stats';
-}
-
-function volverAlMenu() {
-  pantallaActual.value = 'home';
-}
-</script>
-
 <template>
-  <div class="main-background">
-    <Transition name="fade" mode="out-in">
-      <Home v-if="pantallaActual === 'home'" @seleccionar="navegarAStats" />
-      <Stats v-else :config="sesionActiva" @back="volverAlMenu" />
-    </Transition>
+  <div id="app-container">
+    <router-view />
+
+    <nav class="bottom-nav">
+      <router-link to="/">🏠</router-link>
+      <router-link to="/partida/nueva" class="plus-btn">➕</router-link>
+      <router-link to="/historial">🃏</router-link>
+      <router-link to="/ranking">🏆</router-link>
+      <router-link to="/mi-perfil">👤</router-link>
+    </nav>
   </div>
 </template>
 
-<style>
-/* Aquí movemos el CSS base que comparten ambas: .main-background, .fade, .toast, etc. */
-.main-background {
-  min-height: 100vh;
-  background: linear-gradient(rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.95)),
-    url('./assets/Backgound.jpg') center/cover no-repeat fixed;
-  color: #f8fafc;
-  font-family: 'Inter', sans-serif;
-}
-</style>
+<script setup>
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
+
+// Usamos un computed en lugar de un watcher, es más limpio y seguro
+const isNavVisible = computed(() => {
+  // Si la ruta no existe o no tiene nombre aún, no mostramos nada
+  if (!route || !route.name) return false
+
+  // Lista de páginas donde ocultamos la barra
+  const hiddenRoutes = ['Login', 'Register']
+  return !hiddenRoutes.includes(route.name)
+})
+</script>
