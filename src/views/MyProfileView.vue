@@ -47,7 +47,8 @@
                 </div>
 
                 <div class="decks-layout-grid">
-                    <DeckCard v-for="deck in decks" :key="deck.id" :deck="deck" />
+                    <DeckCard v-for="deck in decks" :key="deck.id" :deck="deck" @click="openDecklist(deck.decklist_url)"
+                        class="clickable-card" />
 
                     <div v-if="decks.length === 0" class="empty-state-card" @click="showAddDeck = true">
                         <p>No tienes mazos en tu grimorio. Pulsa aquí para forjar uno.</p>
@@ -91,6 +92,12 @@
                         </div>
                     </div>
 
+                    <div class="form-group">
+                        <label>URL del Deck (Moxfield, Archidekt...)</label>
+                        <input v-model="newDeck.decklist_url" type="url"
+                            placeholder="https://www.moxfield.com/decks/..." />
+                    </div>
+
                     <div class="form-group" v-if="newDeck.formato === 'commander'">
                         <label>Comandante</label>
                         <input v-model="newDeck.comandante_nombre" type="text" placeholder="Nombre de la carta"
@@ -104,8 +111,8 @@
                     </div>
 
                     <div class="form-group">
-                        <label>URL de la Imagen (Opcional)</label>
-                        <input v-model="newDeck.image_url" type="url" placeholder="https://..." />
+                        <label>URL de la Imagen de Portada (Opcional)</label>
+                        <input v-model="newDeck.image_url" type="url" placeholder="Direct link a .jpg o .png" />
                     </div>
 
                     <button type="submit" class="btn-submit-magic" :disabled="isSubmitting">
@@ -133,7 +140,8 @@ const newDeck = reactive({
     comandante_nombre: '',
     arquetipo_pauper: '',
     image_url: '',
-    colors: [] // Se convertirá a string para color_identity
+    decklist_url: '', // Nueva columna
+    colors: []
 })
 
 onMounted(async () => {
@@ -150,12 +158,19 @@ const fetchDecks = async (userId) => {
     decks.value = d || []
 }
 
+// Función para abrir la URL del mazo
+const openDecklist = (url) => {
+    if (url) {
+        window.open(url, '_blank');
+    } else {
+        console.log("Este mazo no tiene URL configurada.");
+    }
+}
+
 const addNewDeck = async () => {
     isSubmitting.value = true
     try {
         const { data: { user } } = await supabase.auth.getUser()
-
-        // Unimos los colores seleccionados en un string tipo 'WUB'
         const colorString = newDeck.colors.sort().join('')
 
         const { error } = await supabase.from('decks').insert([
@@ -167,6 +182,7 @@ const addNewDeck = async () => {
                 arquetipo_pauper: newDeck.formato === 'pauper' ? newDeck.arquetipo_pauper : null,
                 color_identity: colorString,
                 image_url: newDeck.image_url || null,
+                decklist_url: newDeck.decklist_url || null, // Guardamos la URL
                 is_active: true
             }
         ])
@@ -174,7 +190,10 @@ const addNewDeck = async () => {
         if (error) throw error
 
         // Reset
-        Object.assign(newDeck, { nombre_personalizado: '', comandante_nombre: '', arquetipo_pauper: '', image_url: '', colors: [] })
+        Object.assign(newDeck, {
+            nombre_personalizado: '', comandante_nombre: '',
+            arquetipo_pauper: '', image_url: '', decklist_url: '', colors: []
+        })
         showAddDeck.value = false
         await fetchDecks(user.id)
 
