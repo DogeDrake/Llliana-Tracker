@@ -123,4 +123,37 @@ const isNavVisible = computed(() => {
 * {
   -webkit-tap-highlight-color: transparent;
 }
+/* Estilo Global para el fondo */
+#app {
+  min-height: 100vh;
+  /* Ruta a tu imagen en assets */
+  background-image:
+    linear-gradient(rgba(15, 23, 42, 0.85), rgba(15, 23, 42, 0.95)),
+    /* Capa de contraste */
+    url('@/assets/Backgound.jpg');
+  /* Cambia el nombre por el de tu archivo */
+
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  /* Efecto elegante de profundidad */
+  background-repeat: no-repeat;
+
+  /* Asegura que todo el texto sea legible sobre el arte */
+  color: #f8fafc;
+}
+
+/* Opcional: Un toque de "vibración" mística */
+#app::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.4) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
 </style>

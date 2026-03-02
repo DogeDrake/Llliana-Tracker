@@ -5,12 +5,14 @@ import DeckCard from '../components/DeckCard.vue'
 
 const profile = ref(null)
 const decks = ref([])
+const loading = ref(true)
+const isSubmitting = ref(false)
+const showAddDeck = ref(false)
+
 const stats = reactive({
     totalMatches: 0,
     winRate: 0
 })
-const showAddDeck = ref(false)
-const isSubmitting = ref(false)
 
 const newDeck = reactive({
     nombre_personalizado: '',
@@ -23,65 +25,57 @@ const newDeck = reactive({
 })
 
 onMounted(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-        // 1. Cargar el perfil del usuario
-        const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-        profile.value = p
+    try {
+        loading.value = true
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-        // 2. Cargar sus mazos
-        fetchDecks(user.id)
+        if (authError || !user) {
+            window.location.href = '/login'
+            return
+        }
 
-        // 3. Calcular estadísticas basadas en sus participaciones reales
-        fetchStats(user.id)
+        const userId = user.id
+
+        const [profileRes, decksRes] = await Promise.all([
+            supabase.from('profiles').select('*').eq('id', userId).single(),
+            supabase.from('decks').select('*').eq('user_id', userId).order('created_at', { ascending: false })
+        ])
+
+        if (profileRes.error) throw profileRes.error
+
+        profile.value = profileRes.data
+        decks.value = decksRes.data || []
+        await fetchStats(userId)
+
+    } catch (err) {
+        console.error("Error crítico:", err.message)
+    } finally {
+        loading.value = false
     }
 })
 
-const fetchDecks = async (userId) => {
-    const { data: d } = await supabase.from('decks')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-    decks.value = d || []
-}
-
-/**
- * Lógica para obtener las partidas donde el usuario ha participado
- */
 const fetchStats = async (userId) => {
     try {
-        // Consultamos la tabla match_participants buscando el user_id del usuario logueado
-        const { data: participations, error } = await supabase
+        const { data, error } = await supabase
             .from('match_participants')
             .select('is_winner')
             .eq('user_id', userId)
 
         if (error) throw error
-
-        if (participations) {
-            const total = participations.length
-            // Contamos cuántas veces is_winner es true
-            const wins = participations.filter(p => p.is_winner === true).length
-
-            stats.totalMatches = total
-            // Calculamos el Win Rate (evitando división por cero)
-            stats.winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : 0
+        if (data && data.length > 0) {
+            const wins = data.filter(p => p.is_winner === true).length
+            stats.totalMatches = data.length
+            stats.winRate = ((wins / data.length) * 100).toFixed(1)
         }
-    } catch (err) {
-        console.error("Error al calcular estadísticas:", err.message)
+    } catch (e) {
+        console.warn("Error stats:", e.message)
     }
-}
-
-const openDecklist = (url) => {
-    if (url) window.open(url, '_blank')
 }
 
 const addNewDeck = async () => {
     isSubmitting.value = true
     try {
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user) throw new Error("No hay sesión activa")
-
         const colorString = newDeck.colors.sort().join('')
 
         const { error } = await supabase.from('decks').insert([
@@ -100,12 +94,11 @@ const addNewDeck = async () => {
 
         if (error) throw error
 
-        Object.assign(newDeck, {
-            nombre_personalizado: '', comandante_nombre: '',
-            arquetipo_pauper: '', image_url: '', decklist_url: '', colors: []
-        })
+        // Reset y recarga
+        Object.assign(newDeck, { nombre_personalizado: '', comandante_nombre: '', arquetipo_pauper: '', image_url: '', decklist_url: '', colors: [] })
         showAddDeck.value = false
-        await fetchDecks(user.id)
+        const { data: d } = await supabase.from('decks').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
+        decks.value = d || []
 
     } catch (err) {
         alert('Error: ' + err.message)
@@ -114,18 +107,21 @@ const addNewDeck = async () => {
     }
 }
 
+const openDecklist = (url) => { if (url) window.open(url, '_blank') }
 async function handleLogout() {
     await supabase.auth.signOut()
-    window.location.href = '/Lilliana-Tracker/login'
+    window.location.href = '/login'
 }
 </script>
 
 <template>
-    <div class="profile-view-root" v-if="profile">
-        <div class="fixed-bg-elements">
-            <div class="mana-particles-overlay"></div>
-            <div class="ambient-glow"></div>
-        </div>
+    <div v-if="loading" class="loading-overlay">
+        <div class="spinner"></div>
+        <p>Invocando tu chispa de Planeswalker...</p>
+    </div>
+
+    <div v-else-if="profile" class="profile-view-root">
+        <div class="vignette-overlay"></div>
 
         <div class="relative-content fade-in">
             <header class="profile-main-header">
@@ -135,18 +131,17 @@ async function handleLogout() {
                 </nav>
 
                 <div class="hero-section">
-                    <div class="avatar-frame">
-                        <div class="avatar-circle">
-                            {{ profile?.username?.charAt(0).toUpperCase() }}
-                        </div>
+                    <div class="avatar-wrapper">
+                        <div class="avatar-circle">{{ profile.username?.charAt(0).toUpperCase() }}</div>
+                        <div class="avatar-glow"></div>
                     </div>
                     <div class="hero-text">
-                        <h1 class="username-title">{{ profile?.username }}</h1>
+                        <h1 class="username-title">{{ profile.username }}</h1>
                         <p class="rank-subtitle">Planeswalker de Élite</p>
                     </div>
                 </div>
 
-                <div class="quick-stats-grid">
+                <div class="quick-stats-row">
                     <div class="q-stat">
                         <span class="q-num">{{ decks.length }}</span>
                         <span class="q-label">Grimorios</span>
@@ -164,23 +159,23 @@ async function handleLogout() {
 
             <main class="decks-section">
                 <div class="decks-header-bar">
-                    <h2>Tus Mazos</h2>
+                    <h2 class="section-title">Tus Mazos</h2>
                     <button @click="showAddDeck = true" class="add-deck-btn">+ NUEVO MAZO</button>
                 </div>
 
                 <div class="decks-layout-grid">
                     <DeckCard v-for="deck in decks" :key="deck.id" :deck="deck" @click="openDecklist(deck.decklist_url)"
-                        class="clickable-card" />
+                        class="clickable-deck" />
 
                     <div v-if="decks.length === 0" class="empty-state-card" @click="showAddDeck = true">
-                        <p>No tienes mazos en tu grimorio. Pulsa aquí para forjar uno.</p>
+                        <p>Tu grimorio está vacío. Pulsa para forjar un mazo.</p>
                     </div>
                 </div>
             </main>
         </div>
 
         <div v-if="showAddDeck" class="modal-overlay" @click.self="showAddDeck = false">
-            <div class="modal-content glass-card fade-in-up">
+            <div class="modal-content glass-modal fade-in-up">
                 <div class="modal-header">
                     <h3>Nueva Invocación</h3>
                     <button class="close-btn" @click="showAddDeck = false">×</button>
@@ -212,11 +207,6 @@ async function handleLogout() {
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label>URL del Deck</label>
-                        <input v-model="newDeck.decklist_url" type="url" placeholder="https://..." />
-                    </div>
-
                     <div class="form-group" v-if="newDeck.formato === 'commander'">
                         <label>Comandante</label>
                         <input v-model="newDeck.comandante_nombre" type="text" placeholder="Nombre de la carta"
@@ -241,42 +231,31 @@ async function handleLogout() {
             </div>
         </div>
     </div>
+
+    <div v-else class="error-state">
+        <div class="error-icon">⚠️</div>
+        <p>No se pudo establecer conexión con el multiverso.</p>
+        <button @click="handleLogout" class="logout-btn">Reintentar</button>
+    </div>
 </template>
+
 <style scoped>
-/* (Estilos previos heredados) */
 .profile-view-root {
-    width: 100%;
+    background: transparent;
     min-height: 100vh;
-    background: #020617;
     color: white;
-    position: relative;
 }
 
-.fixed-bg-elements {
+/* Capa para mejorar legibilidad sobre el fondo */
+.vignette-overlay {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+    background: radial-gradient(circle, transparent 20%, rgba(0, 0, 0, 0.5) 100%);
     z-index: 0;
     pointer-events: none;
-}
-
-.mana-particles-overlay {
-    width: 100%;
-    height: 100%;
-    background-image: radial-gradient(rgba(59, 130, 246, 0.1) 1px, transparent 1px);
-    background-size: 40px 40px;
-}
-
-.ambient-glow {
-    position: absolute;
-    top: -10%;
-    right: -10%;
-    width: 70vw;
-    height: 70vw;
-    background: radial-gradient(circle, rgba(29, 78, 216, 0.15) 0%, transparent 70%);
-    filter: blur(80px);
 }
 
 .relative-content {
@@ -287,6 +266,7 @@ async function handleLogout() {
     padding: 0 20px;
 }
 
+/* Header y Stats */
 .profile-main-header {
     padding: 40px 0;
 }
@@ -295,21 +275,21 @@ async function handleLogout() {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 60px;
+    margin-bottom: 40px;
 }
 
 .brand {
     font-weight: 900;
-    letter-spacing: 2px;
     color: #3b82f6;
-    font-size: 0.7rem;
+    letter-spacing: 2px;
+    font-size: 0.8rem;
 }
 
 .logout-btn {
-    background: transparent;
+    background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: #94a3b8;
-    padding: 6px 12px;
+    padding: 8px 16px;
     border-radius: 8px;
     cursor: pointer;
 }
@@ -319,12 +299,13 @@ async function handleLogout() {
     align-items: center;
     gap: 30px;
     margin-bottom: 40px;
+    flex-wrap: wrap;
 }
 
 .avatar-circle {
     width: 100px;
     height: 100px;
-    background: linear-gradient(135deg, #3b82f6, #1e4ed8);
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -335,24 +316,22 @@ async function handleLogout() {
 }
 
 .username-title {
-    font-size: 3rem;
+    font-size: clamp(2rem, 5vw, 3.5rem);
     margin: 0;
     letter-spacing: -2px;
 }
 
 .rank-subtitle {
     color: #60a5fa;
-    margin-top: 5px;
     font-weight: bold;
 }
 
-.quick-stats-grid {
+.quick-stats-row {
     display: flex;
     gap: 20px;
-    background: rgba(255, 255, 255, 0.03);
-    padding: 20px;
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 25px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .q-stat {
@@ -362,34 +341,36 @@ async function handleLogout() {
 
 .q-num {
     display: block;
-    font-size: 1.5rem;
-    font-weight: 800;
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: #3b82f6;
 }
 
 .q-label {
-    font-size: 0.65rem;
+    font-size: 0.7rem;
     color: #64748b;
     text-transform: uppercase;
 }
 
+/* Grid de Mazos */
 .decks-section {
-    padding: 40px 0 100px;
+    padding-bottom: 100px;
 }
 
 .decks-header-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 30px;
+    margin: 40px 0 20px;
 }
 
 .add-deck-btn {
     background: #3b82f6;
     color: white;
     border: none;
-    padding: 10px 20px;
+    padding: 12px 24px;
     border-radius: 12px;
-    font-weight: bold;
+    font-weight: 900;
     cursor: pointer;
 }
 
@@ -409,27 +390,28 @@ async function handleLogout() {
     cursor: pointer;
 }
 
-/* ESTILOS DEL MODAL ADAPTADO */
+/* Modal Glassmorphism */
 .modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    padding: 20px;
 }
 
-.modal-content {
-    background: #0f172a;
-    border: 1px solid rgba(59, 130, 246, 0.4);
+.glass-modal {
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(59, 130, 246, 0.3);
     padding: 30px;
-    border-radius: 28px;
-    width: 95%;
+    border-radius: 24px;
+    width: 100%;
     max-width: 500px;
 }
 
@@ -439,13 +421,15 @@ async function handleLogout() {
     margin-bottom: 20px;
 }
 
-.form-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
+.close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
 }
 
-.form-group {
+.magic-form .form-group {
     margin-bottom: 15px;
     display: flex;
     flex-direction: column;
@@ -461,18 +445,23 @@ async function handleLogout() {
 
 .magic-form input,
 .magic-form select {
-    background: #1e293b;
-    border: 1px solid #334155;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     padding: 12px;
-    border-radius: 12px;
+    border-radius: 10px;
     color: white;
 }
 
-/* COLOR PICKER */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+/* Color Picker */
 .color-picker {
     display: flex;
     gap: 5px;
-    margin-top: 5px;
 }
 
 .color-dot {
@@ -484,22 +473,21 @@ async function handleLogout() {
     justify-content: center;
     font-size: 0.7rem;
     cursor: pointer;
-    border: 2px solid transparent;
+    background: #475569;
     opacity: 0.4;
     transition: 0.3s;
-    background: #475569;
     color: black;
-    font-weight: 900;
+    font-weight: bold;
 }
 
 .color-dot.active {
     opacity: 1;
-    border-color: white;
     transform: scale(1.1);
+    box-shadow: 0 0 10px white;
 }
 
 .color-dot.W {
-    background: #f9fafb;
+    background: #fff;
 }
 
 .color-dot.U {
@@ -529,12 +517,34 @@ async function handleLogout() {
     border: none;
     border-radius: 12px;
     color: white;
-    font-weight: bold;
+    font-weight: 800;
     cursor: pointer;
     margin-top: 10px;
 }
 
-.btn-submit-magic:disabled {
-    opacity: 0.5;
+/* Loading Spinner */
+.loading-overlay {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #3b82f6;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(59, 130, 246, 0.1);
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 15px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 </style>
