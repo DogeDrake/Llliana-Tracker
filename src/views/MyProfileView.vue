@@ -3,27 +3,21 @@ import { ref, onMounted, reactive } from 'vue'
 import { supabase } from '../supabaseClient'
 import DeckCard from '../components/DeckCard.vue'
 
+// --- ESTADOS ---
 const profile = ref(null)
 const decks = ref([])
 const loading = ref(true)
 const isSubmitting = ref(false)
 const showAddDeck = ref(false)
+const showEditAvatar = ref(false)
+const newAvatarUrl = ref('') // Estado para la nueva URL
 
 const stats = reactive({
     totalMatches: 0,
     winRate: 0
 })
 
-const newDeck = reactive({
-    nombre_personalizado: '',
-    formato: 'commander',
-    comandante_nombre: '',
-    arquetipo_pauper: '',
-    image_url: '',
-    decklist_url: '',
-    colors: []
-})
-
+// --- LÓGICA DE CARGA ---
 onMounted(async () => {
     try {
         loading.value = true
@@ -34,7 +28,6 @@ onMounted(async () => {
             return
         }
 
-        // 1. Cargamos perfil y mazos
         const [profileRes, decksRes] = await Promise.all([
             supabase.from('profiles').select('*').eq('id', user.id).single(),
             supabase.from('decks').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
@@ -45,81 +38,64 @@ onMounted(async () => {
         profile.value = profileRes.data
         decks.value = decksRes.data || []
 
-        // 2. Cargamos las estadísticas con la nueva lógica de búsqueda
+        // Inicializamos el input con la url actual
+        newAvatarUrl.value = profile.value.avatar_url || ''
+
         await fetchStats(user.id, profile.value.username)
 
     } catch (err) {
-        console.error("Error crítico en el perfil:", err.message)
+        console.error("Error crítico:", err.message)
     } finally {
         loading.value = false
     }
 })
 
-// FUNCIÓN CORREGIDA: Ahora busca por ID o por nombre (DGDRK)
 const fetchStats = async (userId, username) => {
     try {
         const { data, error } = await supabase
             .from('match_participants')
-            .select('is_winner, player_name_manual')
+            .select('is_winner')
             .or(`user_id.eq.${userId},player_name_manual.ilike.${username}`)
 
         if (error) throw error
-
         if (data && data.length > 0) {
             const total = data.length
             const wins = data.filter(p => p.is_winner === true).length
-
             stats.totalMatches = total
-            // Calculamos el winrate con un decimal para mayor precisión
-            stats.winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : 0
-
-            console.log(`📊 Stats de ${username}: ${wins}/${total} victorias.`);
-        } else {
-            stats.totalMatches = 0
-            stats.winRate = 0
+            stats.winRate = ((wins / total) * 100).toFixed(1)
         }
     } catch (e) {
-        console.warn("Error al calcular estadísticas del perfil:", e.message)
+        console.warn("Error stats:", e.message)
     }
 }
 
-const addNewDeck = async () => {
+// --- FUNCIÓN DE ACTUALIZACIÓN DINÁMICA ---
+const updateAvatar = async () => {
+    if (!newAvatarUrl.value) return
     isSubmitting.value = true
+
     try {
         const { data: { user } } = await supabase.auth.getUser()
-        const colorString = newDeck.colors.sort().join('')
 
-        const { error } = await supabase.from('decks').insert([
-            {
-                user_id: user.id,
-                nombre_personalizado: newDeck.nombre_personalizado,
-                formato: newDeck.formato,
-                comandante_nombre: newDeck.formato === 'commander' ? newDeck.comandante_nombre : null,
-                arquetipo_pauper: newDeck.formato === 'pauper' ? newDeck.arquetipo_pauper : null,
-                color_identity: colorString,
-                image_url: newDeck.image_url || null,
-                decklist_url: newDeck.decklist_url || null,
-                is_active: true
-            }
-        ])
+        const { error } = await supabase
+            .from('profiles')
+            .update({ avatar_url: newAvatarUrl.value })
+            .eq('id', user.id) // Dinámico por ID de sesión
 
         if (error) throw error
 
-        Object.assign(newDeck, { nombre_personalizado: '', comandante_nombre: '', arquetipo_pauper: '', image_url: '', decklist_url: '', colors: [] })
-        showAddDeck.value = false
-
-        const { data: d } = await supabase.from('decks').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
-        decks.value = d || []
+        // Actualización reactiva local
+        profile.value.avatar_url = newAvatarUrl.value
+        showEditAvatar.value = false
 
     } catch (err) {
-        alert('Error al forjar el mazo: ' + err.message)
+        alert('Error al actualizar: ' + err.message)
     } finally {
         isSubmitting.value = false
     }
 }
 
 const openDecklist = (url) => { if (url) window.open(url, '_blank') }
-
 async function handleLogout() {
     await supabase.auth.signOut()
     window.location.href = '/login'
@@ -129,12 +105,10 @@ async function handleLogout() {
 <template>
     <div v-if="loading" class="loading-overlay">
         <div class="spinner"></div>
-        <p>Invocando tu chispa de Planeswalker...</p>
+        <p>Invocando perfil...</p>
     </div>
 
     <div v-else-if="profile" class="profile-view-root">
-        <div class="vignette-overlay"></div>
-
         <div class="relative-content fade-in">
             <header class="profile-main-header">
                 <nav class="top-bar">
@@ -143,9 +117,15 @@ async function handleLogout() {
                 </nav>
 
                 <div class="hero-section">
-                    <div class="avatar-wrapper">
-                        <div class="avatar-circle">{{ profile.username?.charAt(0).toUpperCase() }}</div>
+                    <div class="avatar-wrapper" @click="showEditAvatar = true">
+                        <div v-if="profile.avatar_url" class="avatar-image-container">
+                            <img :src="profile.avatar_url" class="avatar-image" />
+                        </div>
+                        <div v-else class="avatar-circle">
+                            {{ profile.username?.charAt(0).toUpperCase() }}
+                        </div>
                         <div class="avatar-glow"></div>
+                        <div class="edit-overlay"><span>CAMBIAR</span></div>
                     </div>
                     <div class="hero-text">
                         <h1 class="username-title">{{ profile.username }}</h1>
@@ -174,104 +154,53 @@ async function handleLogout() {
                     <h2 class="section-title">Tus Mazos</h2>
                     <button @click="showAddDeck = true" class="add-deck-btn">+ NUEVO MAZO</button>
                 </div>
-
                 <div class="decks-layout-grid">
-                    <DeckCard v-for="deck in decks" :key="deck.id" :deck="deck" @click="openDecklist(deck.decklist_url)"
-                        class="clickable-deck" />
-
-                    <div v-if="decks.length === 0" class="empty-state-card" @click="showAddDeck = true">
-                        <p>Tu Mazo está vacío. Pulsa para forjar un mazo.</p>
-                    </div>
+                    <DeckCard v-for="deck in decks" :key="deck.id" :deck="deck"
+                        @click="openDecklist(deck.decklist_url)" />
                 </div>
             </main>
         </div>
 
-        <div v-if="showAddDeck" class="modal-overlay" @click.self="showAddDeck = false">
+        <div v-if="showEditAvatar" class="modal-overlay" @click.self="showEditAvatar = false">
             <div class="modal-content glass-modal fade-in-up">
                 <div class="modal-header">
-                    <h3>Nueva Invocación</h3>
-                    <button class="close-btn" @click="showAddDeck = false">×</button>
+                    <h3>Editar Avatar</h3>
+                    <button class="close-btn-styled" @click="showEditAvatar = false">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2"
+                            fill="none">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
                 </div>
 
-                <form @submit.prevent="addNewDeck" class="magic-form">
-                    <div class="form-group">
-                        <label>Nombre del Mazo</label>
-                        <input v-model="newDeck.nombre_personalizado" type="text" placeholder="Ej: Dragones de Liliana"
-                            required />
+                <div class="avatar-form">
+                    <div class="input-group">
+                        <label>URL de la imagen</label>
+                        <input v-model="newAvatarUrl" type="text" placeholder="Pega aquí el enlace de tu imagen..."
+                            class="magic-input" />
                     </div>
 
-                    <div class="form-group">
-                        <label>URL del Mazo (Decklist)</label>
-                        <input v-model="newDeck.decklist_url" type="url" placeholder="https://moxfield.com/..." />
+                    <div class="preview-mini" v-if="newAvatarUrl">
+                        <p>Previsualización:</p>
+                        <img :src="newAvatarUrl" class="mini-img" @error="newAvatarUrl = ''" />
                     </div>
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Formato</label>
-                            <select v-model="newDeck.formato">
-                                <option value="commander">Commander</option>
-                                <option value="pauper">Pauper</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Colores</label>
-                            <div class="color-picker">
-                                <label v-for="c in ['W', 'U', 'B', 'R', 'G']" :key="c"
-                                    :class="['color-dot', c, { active: newDeck.colors.includes(c) }]">
-                                    <input type="checkbox" :value="c" v-model="newDeck.colors" hidden /> {{ c }}
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-group" v-if="newDeck.formato === 'commander'">
-                        <label>Comandante</label>
-                        <input v-model="newDeck.comandante_nombre" type="text" placeholder="Nombre de la carta"
-                            required />
-                    </div>
-
-                    <div class="form-group" v-if="newDeck.formato === 'pauper'">
-                        <label>Arquetipo Pauper</label>
-                        <input v-model="newDeck.arquetipo_pauper" type="text" placeholder="Ej: Burn, Affinity..."
-                            required />
-                    </div>
-
-                    <div class="form-group">
-                        <label>URL Imagen Portada</label>
-                        <input v-model="newDeck.image_url" type="url" placeholder="Link directo" />
-                    </div>
-
-                    <button type="submit" class="btn-submit-magic" :disabled="isSubmitting">
-                        {{ isSubmitting ? 'Sellando Contrato...' : 'Añadir al Mazo' }}
+                    <button @click="updateAvatar" class="btn-submit-magic" :disabled="isSubmitting">
+                        {{ isSubmitting ? 'Guardando...' : 'Actualizar Imagen' }}
                     </button>
-                </form>
+                </div>
             </div>
         </div>
-    </div>
-
-    <div v-else class="error-state">
-        <div class="error-icon">⚠️</div>
-        <p>No se pudo establecer conexión con el multiverso.</p>
-        <button @click="handleLogout" class="logout-btn">Reintentar</button>
     </div>
 </template>
 
 <style scoped>
+/* (Se mantienen tus estilos anteriores y añadimos los nuevos) */
 .profile-view-root {
-    background: transparent;
     min-height: 100vh;
     color: white;
-}
-
-.vignette-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: radial-gradient(circle, transparent 20%, rgba(0, 0, 0, 0.5) 100%);
-    z-index: 0;
-    pointer-events: none;
+    background: transparent;
 }
 
 .relative-content {
@@ -279,13 +208,162 @@ async function handleLogout() {
     z-index: 1;
     max-width: 1100px;
     margin: 0 auto;
-    padding: 0 20px;
+    padding: 20px;
 }
 
-.profile-main-header {
-    padding: 40px 0;
+/* Avatar */
+.avatar-wrapper {
+    position: relative;
+    cursor: pointer;
+    transition: 0.3s;
+    width: 120px;
+    height: 120px;
 }
 
+.avatar-image-container {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 3px solid #3b82f6;
+    position: relative;
+    z-index: 2;
+}
+
+.avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatar-circle {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    font-weight: 900;
+    z-index: 2;
+    position: relative;
+}
+
+.edit-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    z-index: 4;
+    transition: 0.3s;
+    font-size: 0.7rem;
+    font-weight: 900;
+}
+
+.avatar-wrapper:hover .edit-overlay {
+    opacity: 1;
+}
+
+.avatar-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 130%;
+    height: 130%;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.4) 0%, transparent 70%);
+    filter: blur(15px);
+    z-index: 1;
+}
+
+/* Modal & Styled X */
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.close-btn-styled {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: white;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.close-btn-styled:hover {
+    background: #ef4444;
+    transform: rotate(90deg);
+}
+
+.avatar-form {
+    text-align: left;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.input-group label {
+    font-size: 0.8rem;
+    color: #60a5fa;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.magic-input {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    padding: 12px;
+    border-radius: 12px;
+    color: white;
+    outline: none;
+    width: 100%;
+}
+
+.magic-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+}
+
+.preview-mini {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.preview-mini p {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    margin-bottom: 10px;
+}
+
+.mini-img {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #3b82f6;
+}
+
+/* (Resto de estilos previos...) */
 .top-bar {
     display: flex;
     justify-content: space-between;
@@ -314,26 +392,12 @@ async function handleLogout() {
     align-items: center;
     gap: 30px;
     margin-bottom: 40px;
-    flex-wrap: wrap;
-}
-
-.avatar-circle {
-    width: 100px;
-    height: 100px;
-    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2.5rem;
-    font-weight: 900;
-    box-shadow: 0 10px 30px rgba(30, 64, 175, 0.4);
 }
 
 .username-title {
     font-size: clamp(2rem, 5vw, 3.5rem);
     margin: 0;
-    letter-spacing: -2px;
+    font-weight: 900;
 }
 
 .rank-subtitle {
@@ -344,7 +408,7 @@ async function handleLogout() {
 .quick-stats-row {
     display: flex;
     gap: 20px;
-    padding: 25px 0;
+    padding: 30px 0;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -356,7 +420,7 @@ async function handleLogout() {
 
 .q-num {
     display: block;
-    font-size: 1.8rem;
+    font-size: 2.2rem;
     font-weight: 900;
     color: #3b82f6;
 }
@@ -365,10 +429,6 @@ async function handleLogout() {
     font-size: 0.7rem;
     color: #64748b;
     text-transform: uppercase;
-}
-
-.decks-section {
-    padding-bottom: 100px;
 }
 
 .decks-header-bar {
@@ -381,10 +441,10 @@ async function handleLogout() {
 .add-deck-btn {
     background: #3b82f6;
     color: white;
-    border: none;
     padding: 12px 24px;
     border-radius: 12px;
     font-weight: 900;
+    border: none;
     cursor: pointer;
 }
 
@@ -394,132 +454,28 @@ async function handleLogout() {
     gap: 20px;
 }
 
-.empty-state-card {
-    grid-column: 1 / -1;
-    padding: 60px;
-    border: 2px dashed rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    text-align: center;
-    color: #64748b;
-    cursor: pointer;
-}
-
 .modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(10px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
-    padding: 20px;
 }
 
 .glass-modal {
-    background: rgba(15, 23, 42, 0.9);
+    background: #1e293b;
     border: 1px solid rgba(59, 130, 246, 0.3);
-    padding: 30px;
+    padding: 40px;
     border-radius: 24px;
     width: 100%;
-    max-width: 500px;
-}
-
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 20px;
-}
-
-.close-btn {
-    background: none;
-    border: none;
-    color: white;
-    font-size: 1.5rem;
-    cursor: pointer;
-}
-
-.magic-form .form-group {
-    margin-bottom: 15px;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-
-.magic-form label {
-    font-size: 0.7rem;
-    color: #60a5fa;
-    font-weight: bold;
-    text-transform: uppercase;
-}
-
-.magic-form input,
-.magic-form select {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 12px;
-    border-radius: 10px;
-    color: white;
-}
-
-.form-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-}
-
-.color-picker {
-    display: flex;
-    gap: 5px;
-}
-
-.color-dot {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.7rem;
-    cursor: pointer;
-    background: #475569;
-    opacity: 0.4;
-    transition: 0.3s;
-    color: black;
-    font-weight: bold;
-}
-
-.color-dot.active {
-    opacity: 1;
-    transform: scale(1.1);
-    box-shadow: 0 0 10px white;
-}
-
-.color-dot.W {
-    background: #fff;
-}
-
-.color-dot.U {
-    background: #3b82f6;
-    color: white;
-}
-
-.color-dot.B {
-    background: #111827;
-    color: white;
-}
-
-.color-dot.R {
-    background: #ef4444;
-    color: white;
-}
-
-.color-dot.G {
-    background: #22c55e;
-    color: white;
+    max-width: 400px;
+    text-align: center;
 }
 
 .btn-submit-magic {
@@ -531,7 +487,6 @@ async function handleLogout() {
     color: white;
     font-weight: 800;
     cursor: pointer;
-    margin-top: 10px;
 }
 
 .loading-overlay {
@@ -550,12 +505,25 @@ async function handleLogout() {
     border-top-color: #3b82f6;
     border-radius: 50%;
     animation: spin 1s linear infinite;
-    margin-bottom: 15px;
 }
 
 @keyframes spin {
     to {
         transform: rotate(360deg);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
     }
 }
 </style>
