@@ -17,6 +17,7 @@
             <div class="ranking-container">
                 <div v-for="(player, index) in leaders" :key="player.username" class="honor-row"
                     :class="[getRankClass(index), { 'is-link': player.is_registered }]" @click="goToProfile(player)">
+
                     <div class="rank-badge-wrapper">
                         <div class="rank-number" v-if="index > 2">#{{ index + 1 }}</div>
                         <div class="medal-display" v-else>{{ getMedal(index) }}</div>
@@ -70,7 +71,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { supabase } from '../supabaseClient'
-import { useRouter } from 'vue-router' // Importamos el router
+import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const leaders = ref([])
@@ -79,35 +80,23 @@ const loading = ref(true)
 onMounted(async () => {
     try {
         loading.value = true
-
-        // Traemos todos los participantes. 
-        // No podemos usar !inner aquí porque la relación en la DB es por ID, 
-        // pero nosotros lo haremos por nombre en el código.
         const { data, error } = await supabase
             .from('match_participants')
-            .select(`
-                is_winner,
-                player_name_manual
-            `)
+            .select(`is_winner, player_name_manual`)
 
         if (error) throw error
 
-        // Traemos todos los perfiles registrados para comparar
         const { data: registeredUsers, error: pError } = await supabase
             .from('profiles')
             .select('username')
 
         if (pError) throw pError
 
-        // Creamos un Set para búsqueda rápida de usuarios con cuenta
         const usernamesConCuenta = new Set(registeredUsers.map(u => u.username))
-
         const stats = {}
 
         data.forEach(row => {
             const name = row.player_name_manual
-
-            // SOLO si el nombre manual existe en nuestra lista de usuarios con cuenta
             if (name && usernamesConCuenta.has(name)) {
                 if (!stats[name]) {
                     stats[name] = {
@@ -117,7 +106,6 @@ onMounted(async () => {
                         is_registered: true
                     }
                 }
-
                 stats[name].total_matches++
                 if (row.is_winner) stats[name].total_wins++
             }
@@ -138,9 +126,7 @@ onMounted(async () => {
     }
 })
 
-// Asegúrate de que la función de navegación no tenga filtros:
 const goToProfile = (player) => {
-    // Navegamos directamente con el username que tengamos
     router.push(`/profile/${player.username}`)
 }
 
@@ -153,56 +139,35 @@ const getRankClass = (index) => {
 }
 
 const getMeterColor = (wr, index) => {
-    if (index === 0) return '#fbbf24'
-    if (index === 1) return '#cbd5e1'
-    if (index === 2) return '#d97706'
+    if (index === 0) return '#ffd700'
+    if (index === 1) return '#e2e8f0'
+    if (index === 2) return '#cd7f32'
     return wr > 50 ? '#3b82f6' : '#475569'
 }
 </script>
 
 <style scoped>
-/* (Mantenemos tus estilos y añadimos los nuevos para la interactividad) */
-
-.is-link {
-    cursor: pointer;
-}
-
-.name-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.registered-badge {
-    color: #3b82f6;
-    display: flex;
-    align-items: center;
-}
-
-.profile-arrow {
-    opacity: 0;
-    transform: translateX(-10px);
-    transition: 0.3s;
-    color: #3b82f6;
-    margin-left: 10px;
-}
-
-.honor-row.is-link:hover .profile-arrow {
-    opacity: 1;
-    transform: translateX(0);
-}
-
-.honor-row.is-link:hover {
-    background: rgba(59, 130, 246, 0.05);
-    border-bottom-color: #3b82f6;
-}
-
-/* Resto de tus estilos originales... */
 .hall-of-fame-root {
     padding: 40px 20px;
     max-width: 900px;
     margin: 0 auto;
     color: #f8fafc;
+}
+
+.fade-in {
+    animation: fadeIn 0.8s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .honor-header {
@@ -211,7 +176,7 @@ const getMeterColor = (wr, index) => {
 }
 
 .monumental-title {
-    font-size: 3.5rem;
+    font-size: clamp(2.5rem, 8vw, 4rem);
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: -2px;
@@ -221,37 +186,71 @@ const getMeterColor = (wr, index) => {
     -webkit-text-fill-color: transparent;
 }
 
-.season-tag {
-    font-weight: 800;
-    color: #3b82f6;
-    letter-spacing: 4px;
-    font-size: 0.8rem;
-}
-
 .honor-row {
     display: flex;
     align-items: center;
     padding: 24px;
     margin-bottom: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(30, 41, 59, 0.4);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
     transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
-    position: relative;
 }
 
+/* --- COLORES TOP 3 REFORZADOS --- */
+
+.tier-gold {
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(30, 41, 59, 0.6) 100%);
+    border: 1px solid rgba(251, 191, 36, 0.5);
+    box-shadow: 0 10px 30px -10px rgba(251, 191, 36, 0.3);
+    margin-bottom: 25px;
+    transform: scale(1.03);
+    animation: float 4s ease-in-out infinite;
+}
+
+.tier-silver {
+    background: linear-gradient(135deg, rgba(148, 163, 184, 0.15) 0%, rgba(30, 41, 59, 0.6) 100%);
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    box-shadow: 0 10px 30px -10px rgba(148, 163, 184, 0.2);
+    margin-bottom: 25px;
+    transform: scale(1.02);
+    animation: float 4s ease-in-out infinite;
+    animation-delay: 0.5s;
+}
+
+.tier-bronze {
+    background: linear-gradient(135deg, rgba(205, 127, 50, 0.15) 0%, rgba(30, 41, 59, 0.6) 100%);
+    border: 1px solid rgba(205, 127, 50, 0.4);
+    box-shadow: 0 10px 30px -10px rgba(205, 127, 50, 0.2);
+    margin-bottom: 25px;
+    transform: scale(1.02);
+    animation: float 4s ease-in-out infinite;
+    animation-delay: 1s;
+}
+
+@keyframes float {
+
+    0%,
+    100% {
+        transform: translateY(0) scale(1.03);
+    }
+
+    50% {
+        transform: translateY(-8px) scale(1.03);
+    }
+}
+
+/* --- DETALLES DE LAS CARDS --- */
+
 .rank-badge-wrapper {
-    width: 60px;
+    width: 80px;
     display: flex;
     justify-content: center;
 }
 
 .medal-display {
-    font-size: 2.2rem;
-}
-
-.rank-number {
-    font-weight: 900;
-    color: #334155;
-    font-size: 1.2rem;
+    font-size: 3rem;
+    filter: drop-shadow(0 0 15px rgba(0, 0, 0, 0.3));
 }
 
 .warrior-profile {
@@ -261,7 +260,22 @@ const getMeterColor = (wr, index) => {
 
 .warrior-name {
     margin: 0;
+    font-size: 1.4rem;
     font-weight: 800;
+    letter-spacing: -0.5px;
+}
+
+/* Colores de nombres específicos para el podio */
+.tier-gold .warrior-name {
+    color: #fbbf24;
+}
+
+.tier-silver .warrior-name {
+    color: #e2e8f0;
+}
+
+.tier-bronze .warrior-name {
+    color: #d97706;
 }
 
 .warrior-meta {
@@ -269,45 +283,82 @@ const getMeterColor = (wr, index) => {
     align-items: center;
     gap: 12px;
     margin-top: 6px;
-    font-size: 0.85rem;
-    color: #64748b;
+    font-size: 0.9rem;
+    color: #94a3b8;
 }
 
 .separator {
     width: 4px;
     height: 4px;
-    background: #334155;
+    background: rgba(255, 255, 255, 0.1);
     border-radius: 50%;
 }
 
 .lethality-meter {
     text-align: right;
-    min-width: 120px;
+    min-width: 140px;
 }
 
 .meter-value {
     display: block;
-    font-size: 1.4rem;
+    font-size: 1.7rem;
     font-weight: 900;
+    line-height: 1;
 }
 
 .meter-label {
-    font-size: 0.6rem;
+    font-size: 0.65rem;
     text-transform: uppercase;
-    color: #475569;
+    color: #64748b;
+    font-weight: 700;
 }
 
 .meter-bar-bg {
-    height: 3px;
+    height: 6px;
     width: 100%;
-    background: rgba(255, 255, 255, 0.05);
-    margin-top: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    margin-top: 10px;
     border-radius: 10px;
     overflow: hidden;
 }
 
 .meter-bar-fill {
     height: 100%;
-    transition: width 1s ease-out;
+    transition: width 2s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.is-link {
+    cursor: pointer;
+}
+
+.is-link:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateX(10px);
+}
+
+.profile-arrow {
+    opacity: 0;
+    transition: 0.3s;
+    color: #3b82f6;
+    margin-left: 15px;
+}
+
+.honor-row.is-link:hover .profile-arrow {
+    opacity: 1;
+}
+
+@media (max-width: 600px) {
+    .honor-row {
+        flex-wrap: wrap;
+        padding: 16px;
+    }
+
+    .lethality-meter {
+        width: 100%;
+        text-align: left;
+        margin-top: 15px;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        padding-top: 15px;
+    }
 }
 </style>
