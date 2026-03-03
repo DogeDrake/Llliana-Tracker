@@ -98,7 +98,7 @@ const updateAvatar = async () => {
 const openDecklist = (url) => { if (url) window.open(url, '_blank') }
 async function handleLogout() {
     await supabase.auth.signOut()
-    window.location.href = '/Lilliana-Tracker/login'
+    window.location.href = '/Lilliana-Tracker/'
 }
 </script>
 
