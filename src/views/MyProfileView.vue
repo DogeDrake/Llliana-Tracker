@@ -355,7 +355,7 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
                     <button @click="showAddDeck = false" class="close-btn-styled">✕</button>
                 </div>
                 <div class="magic-form">
-                    <div class="input-group"><label>Nombre</label><input v-model="newDeck.nombre_personalizado"
+                    <div class="input-group"><label>Nombre del mazo</label><input v-model="newDeck.nombre_personalizado"
                             class="magic-input" /></div>
                     <div class="grid-2-col">
                         <div class="input-group"><label>Formato</label>
@@ -372,7 +372,7 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
                             </div>
                         </div>
                     </div>
-                    <div v-if="newDeck.formato === 'commander'" class="input-group"><label>Comandante</label><input
+                    <div v-if="newDeck.formato === 'commander'" class="input-group"><label>Nombre del Comandante</label><input
                             v-model="newDeck.comandante_nombre" class="magic-input gold-border" /></div>
                     <div v-if="newDeck.formato === 'pauper'" class="input-group"><label>Arquetipo</label><input
                             v-model="newDeck.arquetipo_pauper" class="magic-input blue-border" /></div>
@@ -888,5 +888,103 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
     background: rgba(239, 68, 68, 0.2);
     /* Rojo suave al pasar el ratón */
     color: #f87171;
+}
+
+/* --- CORRECCIÓN COLOR PICKER MINI --- */
+
+.color-picker-mini {
+    display: flex;
+    gap: 8px;
+    padding: 10px 0;
+    flex-wrap: wrap;
+}
+
+.color-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 2px solid #334155;
+    background: #1e293b;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    filter: grayscale(1);
+    /* Desactivados por defecto */
+    opacity: 0.6;
+}
+
+.color-btn:hover {
+    transform: scale(1.1);
+    border-color: #475569;
+    opacity: 1;
+}
+
+/* Estado Activo (Seleccionado) */
+.color-btn.active {
+    filter: grayscale(0);
+    opacity: 1;
+    border-color: #3b82f6;
+    background: #1e293b;
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
+    transform: scale(1.1);
+}
+
+/* Colores específicos para el borde cuando están activos */
+.color-btn.active:nth-child(1) {
+    border-color: #fef3c7;
+    box-shadow: 0 0 10px #fef3c7;
+}
+
+/* Blanco/W */
+.color-btn.active:nth-child(2) {
+    border-color: #3b82f6;
+    box-shadow: 0 0 10px #3b82f6;
+}
+
+/* Azul/U */
+.color-btn.active:nth-child(3) {
+    border-color: #a855f7;
+    box-shadow: 0 0 10px #a855f7;
+}
+
+/* Negro/B */
+.color-btn.active:nth-child(4) {
+    border-color: #ef4444;
+    box-shadow: 0 0 10px #ef4444;
+}
+
+/* Rojo/R */
+.color-btn.active:nth-child(5) {
+    border-color: #22c55e;
+    box-shadow: 0 0 10px #22c55e;
+}
+
+/* Verde/G */
+.color-btn.active:nth-child(6) {
+    border-color: #94a3b8;
+    box-shadow: 0 0 10px #94a3b8;
+}
+
+/* Incoloro/C */
+
+/* Ajuste de los inputs del formulario para que no se peguen */
+.input-group label {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+}
+
+.grid-2-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
 }
 </style>
