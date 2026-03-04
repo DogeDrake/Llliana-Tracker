@@ -41,18 +41,22 @@
                         </h3>
 
                         <div class="deck-info">
-                            <span class="deck-name">
-                                {{ p.decks?.nombre_personalizado || p.deck_name_manual || 'Mazo sin nombre' }}
-                            </span>
+                            <div class="deck-header-row">
+                                <span class="deck-name">
+                                    {{ p.decks?.nombre_personalizado || p.deck_name_manual || 'Mazo sin nombre' }}
+                                </span>
+                                <div class="mini-colors" v-if="p.decks?.color_identity">
+                                    <span v-for="color in sortColors(p.decks.color_identity)" :key="color"
+                                        :class="['mana-icon', color.toLowerCase()]" :title="color">
+                                        {{ getColorSymbol(color) }}
+                                    </span>
+                                </div>
+                            </div>
 
                             <span v-if="match.formato?.toLowerCase() === 'commander' && p.decks?.comandante_nombre"
                                 class="commander-tag">
                                 👤 {{ p.decks.comandante_nombre }}
                             </span>
-
-                            <div class="mini-colors" v-if="p.decks?.color_identity">
-                                <span class="color-symbols">{{ p.decks.color_identity }}</span>
-                            </div>
                         </div>
                     </div>
 
@@ -90,6 +94,22 @@ const route = useRoute()
 const match = ref(null)
 const loading = ref(true)
 
+// Lógica de colores WUBRGC
+const colorOrder = { 'W': 1, 'U': 2, 'B': 3, 'R': 4, 'G': 5, 'C': 6 }
+const colorSymbols = {
+    'W': '☀️', 'U': '💧', 'B': '💀', 'R': '🔥', 'G': '🌳', 'C': '💎'
+}
+
+const sortColors = (colorString) => {
+    if (!colorString) return []
+    // Limpiamos espacios y separamos por comas si vienen de la BD como "W,U,B"
+    return colorString.split(',')
+        .map(c => c.trim().toUpperCase())
+        .sort((a, b) => (colorOrder[a] || 99) - (colorOrder[b] || 99))
+}
+
+const getColorSymbol = (code) => colorSymbols[code] || '?'
+
 const formatDate = (dateStr) => {
     return new Date(dateStr).toLocaleDateString('es-ES', {
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -104,7 +124,6 @@ const copyLink = () => {
 onMounted(async () => {
     try {
         loading.value = true
-        // 1. Fetch de la partida con perfiles y mazos
         const { data, error } = await supabase
             .from('matches')
             .select(`
@@ -120,7 +139,6 @@ onMounted(async () => {
 
         if (error) throw error
 
-        // 2. Cálculo dinámico de Win Rate por mazo o nombre manual
         const processedParticipants = await Promise.all(data.match_participants.map(async (p) => {
             let winRate = null
             let query = supabase.from('match_participants').select('is_winner', { count: 'exact' })
@@ -240,7 +258,7 @@ onMounted(async () => {
 
 .participant-card.is-winner {
     border-color: rgba(234, 179, 8, 0.4);
-    background: linear-gradient(90deg, rgba(234, 179, 8, 0.05) 0%, rgba(30, 41, 59, 0.4) 100%);
+    background: linear-gradient(90deg, rgba(234, 179, 8, 0.02) 0%, rgba(30, 41, 59, 0.4) 100%);
 }
 
 .participant-card.has-account {
@@ -274,7 +292,61 @@ onMounted(async () => {
     align-items: center;
 }
 
-/* USER INFO */
+/* DECK INFO & COLORS */
+.deck-header-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.mini-colors {
+    display: flex;
+    gap: 4px;
+}
+
+.mana-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Colores de fondo de los iconos de mana */
+.mana-icon.w {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.mana-icon.u {
+    background: #3b82f6;
+    color: white;
+}
+
+.mana-icon.b {
+    background: #7c3aed;
+    color: white;
+}
+
+.mana-icon.r {
+    background: #ef4444;
+    color: white;
+}
+
+.mana-icon.g {
+    background: #22c55e;
+    color: white;
+}
+
+.mana-icon.c {
+    background: #94a3b8;
+    color: white;
+}
+
 .username {
     margin: 0;
     font-size: 1.1rem;
@@ -289,15 +361,9 @@ onMounted(async () => {
     text-decoration: none;
 }
 
-.profile-link:hover {
-    text-decoration: underline;
-    color: #3b82f6;
-}
-
 .guest-name {
     color: #94a3b8;
     font-style: italic;
-    font-weight: 400;
 }
 
 .anon-tag {
@@ -309,11 +375,9 @@ onMounted(async () => {
 }
 
 .deck-name {
-    display: block;
     font-size: 0.85rem;
     color: #3b82f6;
     font-weight: 700;
-    margin-top: 4px;
 }
 
 .commander-tag {
@@ -387,5 +451,19 @@ onMounted(async () => {
     to {
         transform: rotate(360deg);
     }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-out;
 }
 </style>
