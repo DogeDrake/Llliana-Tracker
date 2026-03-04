@@ -21,7 +21,6 @@ const showDeckStats = ref(false)
 const newAvatarUrl = ref('')
 const selectedDeckStats = ref(null)
 
-// Objeto de mazo
 const newDeck = reactive({
     nombre_personalizado: '',
     formato: 'commander',
@@ -46,7 +45,133 @@ const stats = reactive({
     winRate: 0
 })
 
-// --- LÓGICA ---
+// --- LÓGICA DE EXPORTACIÓN CSV ---
+const downloadCSV = async () => {
+    try {
+        const matchIds = history.value.map(h => h.match_id);
+
+        // 1. Obtener participantes con los nombres correctos según tu esquema
+        const { data: allParticipants } = await supabase
+            .from('match_participants')
+            .select(`
+                match_id, 
+                player_name_manual, 
+                deck_name_manual, 
+                is_winner,
+                user_id,
+                profiles (username, display_name)
+            `)
+            .in('match_id', matchIds);
+
+        const SEP = ",";
+        let csvContent = "\uFEFF"; // BOM para que Excel detecte UTF-8
+
+        // --- SECCIÓN 1: MIS MAZOS ---
+        csvContent += `--- SECCION: MIS MAZOS ---\n`;
+        csvContent += `Nombre${SEP}Formato${SEP}Comandante/Arquetipo${SEP}Colores${SEP}Estado\n`;
+
+        decks.value.forEach(d => {
+            const extra = d.formato === 'commander' ? d.comandante_nombre : d.arquetipo_pauper;
+            const row = [
+                d.nombre_personalizado,
+                d.formato,
+                extra || '',
+                d.color_identity || '',
+                d.is_active ? 'Activo' : 'Inactivo'
+            ].map(text => `"${String(text).replace(/"/g, '""')}"`);
+            csvContent += row.join(SEP) + "\n";
+        });
+
+        csvContent += "\n\n";
+
+        // --- SECCIÓN 2: HISTORIAL DE PARTIDAS ---
+        const maxOpponents = 3;
+        let headerPartidas = `Fecha${SEP}Formato${SEP}Mazo Usado${SEP}Resultado`;
+        for (let i = 1; i <= maxOpponents; i++) {
+            headerPartidas += `${SEP}Rival ${i}${SEP}Mazo Rival ${i}`;
+        }
+        headerPartidas += `${SEP}Winrate Mazo (Momento)${SEP}Winrate Global (Momento)\n`;
+
+        csvContent += `--- SECCION: HISTORIAL DE PARTIDAS ---\n`;
+        csvContent += headerPartidas;
+
+        // Orden cronológico para los winrates progresivos
+        const chronologicalHistory = [...history.value].sort((a, b) =>
+            new Date(a.matches.fecha_partida) - new Date(b.matches.fecha_partida)
+        );
+
+        let globalWins = 0;
+        const deckWinsCounter = {};
+        const deckTotalCounter = {};
+
+        chronologicalHistory.forEach((match, index) => {
+            const myDeck = match.deck_name_manual || 'Desconocido';
+            const isWin = match.is_winner;
+
+            // Lógica de Winrates
+            if (isWin) globalWins++;
+            const currentGlobalWinrate = ((globalWins / (index + 1)) * 100).toFixed(2);
+            deckTotalCounter[myDeck] = (deckTotalCounter[myDeck] || 0) + 1;
+            if (isWin) deckWinsCounter[myDeck] = (deckWinsCounter[myDeck] || 0) + 1;
+            const currentDeckWinrate = ((deckWinsCounter[myDeck] / deckTotalCounter[myDeck]) * 100).toFixed(2);
+
+            // Filtrar oponentes de esta partida (excluyéndote a ti)
+            const opponentsData = allParticipants
+                ?.filter(p => p.match_id === match.match_id && p.player_name_manual !== profile.value.username)
+                .map(p => {
+                    // Según tu esquema: profiles.username (el @) y profiles.display_name (nombre real)
+                    let displayName = p.player_name_manual;
+                    if (p.profiles) {
+                        const nick = p.profiles.username;
+                        const real = p.profiles.display_name;
+                        displayName = real ? `${nick} (${real})` : nick;
+                    }
+                    return { name: displayName, deck: p.deck_name_manual || '?' };
+                }) || [];
+
+            // Construir fila
+            let rowArray = [
+                new Date(match.matches.fecha_partida).toLocaleString(), // Fecha legible
+                match.matches.formato,
+                myDeck,
+                isWin ? "VICTORIA" : "DERROTA"
+            ];
+
+            // Columnas de rivales
+            for (let i = 0; i < maxOpponents; i++) {
+                if (opponentsData[i]) {
+                    rowArray.push(opponentsData[i].name);
+                    rowArray.push(opponentsData[i].deck);
+                } else {
+                    rowArray.push("");
+                    rowArray.push("");
+                }
+            }
+
+            rowArray.push(`${currentDeckWinrate}%`);
+            rowArray.push(`${currentGlobalWinrate}%`);
+
+            csvContent += rowArray.map(text => `"${String(text).replace(/"/g, '""')}"`).join(SEP) + "\n";
+        });
+
+        // 3. Ejecutar descarga
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `Reporte_Partidas_${profile.value.username}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+    } catch (err) {
+        console.error("Error en exportación:", err);
+        alert("No se pudo generar el CSV");
+    }
+}
+
+// --- LÓGICA EXISTENTE ---
 onMounted(async () => {
     try {
         loading.value = true
@@ -112,14 +237,12 @@ const toggleColor = (code) => {
 }
 
 const openStats = async (deck) => {
-    // 1. Definimos los nombres posibles que este mazo puede tener en el historial
     const possibleNames = [
         deck.nombre_personalizado?.toLowerCase(),
         deck.comandante_nombre?.toLowerCase(),
         deck.arquetipo_pauper?.toLowerCase()
-    ].filter(Boolean); // Eliminamos nulos o vacíos
+    ].filter(Boolean);
 
-    // 2. Filtramos el historial buscando CUALQUIERA de esos nombres
     const deckMatches = history.value.filter(h => {
         if (!h.deck_name_manual) return false;
         const recordedName = h.deck_name_manual.toLowerCase();
@@ -132,11 +255,9 @@ const openStats = async (deck) => {
         return;
     }
 
-    // 3. Cálculo de estadísticas basado en los encuentros encontrados
     const wins = deckMatches.filter(m => m.is_winner).length;
     const matchIds = deckMatches.map(m => m.match_id);
 
-    // 4. Obtenemos los oponentes de esas partidas específicas
     const { data: opponents } = await supabase
         .from('match_participants')
         .select('player_name_manual, is_winner, match_id')
@@ -150,10 +271,8 @@ const openStats = async (deck) => {
         gameOpponents.forEach(opp => {
             const name = opp.player_name_manual || 'Anónimo';
             if (dm.is_winner) {
-                // Si yo gané, él es mi víctima
                 victimMap[name] = (victimMap[name] || 0) + 1;
             } else if (opp.is_winner) {
-                // Si él ganó, es mi némesis
                 nemesisMap[name] = (nemesisMap[name] || 0) + 1;
             }
         });
@@ -236,7 +355,19 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
             <header class="profile-main-header">
                 <nav class="top-bar">
                     <span class="brand">LILLIANA TRACKER</span>
-                    <button @click="handleLogout" class="logout-btn">Cerrar Sesión</button>
+                    <div class="header-actions">
+                        <button @click="downloadCSV" class="export-btn" title="Descargar Reporte CSV">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            Reporte
+                        </button>
+                        <button @click="handleLogout" class="logout-btn">Cerrar Sesión</button>
+                    </div>
                 </nav>
 
                 <div class="hero-section">
@@ -315,11 +446,7 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
                     </div>
                     <button class="close-btn-styled" @click="showDeckStats = false">✕</button>
                 </div>
-
-                <div v-if="selectedDeckStats.empty" class="empty-state-stats">
-                    Sin registros para este mazo.
-                </div>
-
+                <div v-if="selectedDeckStats.empty" class="empty-state-stats">Sin registros para este mazo.</div>
                 <div v-else class="stats-grid-container">
                     <div class="main-metrics">
                         <div class="metric-card">
@@ -331,7 +458,6 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
                             <span class="m-lab">Partidas</span>
                         </div>
                     </div>
-
                     <div class="rival-tracking">
                         <div class="rival-row nemesis">
                             <span class="r-tag">NÉMESIS</span>
@@ -372,8 +498,9 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
                             </div>
                         </div>
                     </div>
-                    <div v-if="newDeck.formato === 'commander'" class="input-group"><label>Nombre del Comandante</label><input
-                            v-model="newDeck.comandante_nombre" class="magic-input gold-border" /></div>
+                    <div v-if="newDeck.formato === 'commander'" class="input-group"><label>Nombre del
+                            Comandante</label><input v-model="newDeck.comandante_nombre"
+                            class="magic-input gold-border" /></div>
                     <div v-if="newDeck.formato === 'pauper'" class="input-group"><label>Arquetipo</label><input
                             v-model="newDeck.arquetipo_pauper" class="magic-input blue-border" /></div>
                     <div class="input-group"><label>Imagen (URL)</label><input v-model="newDeck.image_url"
@@ -399,7 +526,7 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
 .profile-view-root {
     min-height: 100vh;
     color: white;
-    padding-bottom: 80px;
+    padding-bottom: 120px;
     font-family: 'Inter', sans-serif;
 }
 
@@ -417,11 +544,36 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
     margin-bottom: 30px;
 }
 
+.header-actions {
+    display: flex;
+    gap: 10px;
+}
+
 .brand {
     font-weight: 900;
     color: #3b82f6;
     letter-spacing: 2px;
     font-size: 0.75rem;
+}
+
+.export-btn {
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #60a5fa;
+    padding: 6px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.7rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: 0.2s;
+}
+
+.export-btn:hover {
+    background: #3b82f6;
+    color: white;
 }
 
 .logout-btn {
@@ -538,7 +690,7 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
     font-weight: 800;
 }
 
-/* SECCIONES Y ESPACIADO */
+/* SECCIONES */
 .section-header-bar {
     display: flex;
     justify-content: space-between;
@@ -552,16 +704,13 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
     text-transform: uppercase;
     letter-spacing: 1.5px;
     color: #94a3b8;
-    margin-bottom: 15px;
+    margin-bottom: 0;
 }
 
 .history-section-spacer {
     margin-top: 60px;
 }
 
-/* Dando aire al historial */
-
-/* MAZOS */
 .add-deck-btn {
     background: #3b82f6;
     color: white;
@@ -661,6 +810,7 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
     opacity: 1;
 }
 
+/* MODALES */
 /* MODAL STATS (ESTILOS RECUPERADOS) */
 .stats-modal-large {
     max-width: 450px !important;
@@ -753,7 +903,6 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
     font-weight: 800;
 }
 
-/* MODAL GENERAL */
 .modal-overlay {
     position: fixed;
     inset: 0;
@@ -776,6 +925,13 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }
 
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 25px;
+}
+
 .close-btn-styled {
     background: rgba(255, 255, 255, 0.05);
     border: none;
@@ -784,6 +940,71 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
     height: 32px;
     border-radius: 50%;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.magic-input {
+    background: #1e293b;
+    border: 1px solid #334155;
+    padding: 14px;
+    border-radius: 12px;
+    color: white;
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+.btn-submit-magic {
+    width: 100%;
+    padding: 16px;
+    background: #3b82f6;
+    border-radius: 12px;
+    color: white;
+    font-weight: 900;
+    border: none;
+    cursor: pointer;
+}
+
+/* CARGA */
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: #020617;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(59, 130, 246, 0.1);
+    border-left-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-out;
 }
 
 .magic-input {
@@ -816,33 +1037,17 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
 
 .fade-in-up {
     animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
 
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
 
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
-}
-
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 }
 
@@ -969,9 +1174,7 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
     box-shadow: 0 0 10px #94a3b8;
 }
 
-/* Incoloro/C */
 
-/* Ajuste de los inputs del formulario para que no se peguen */
 .input-group label {
     display: block;
     font-size: 0.65rem;
