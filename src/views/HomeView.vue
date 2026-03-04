@@ -5,7 +5,7 @@
                 <div class="greeting-text">
                     <span class="badge">SISTEMA ACTIVO</span>
                     <h1 class="main-title">Hola, {{ profile?.username || 'Planeswalker' }}</h1>
-                    <p class="subtitle">Elije que consultaras hoy</p>
+                    <p class="subtitle">Elige que consultaras hoy</p>
                 </div>
                 <div class="mini-avatar" v-if="profile?.avatar_url">
                     <img :src="profile.avatar_url" alt="Perfil">
@@ -56,7 +56,7 @@
                     </div>
                     <div class="match-players">
                         <span class="winner-name">{{ getWinnerName(match) }}</span>
-                        <span class="vs">venció en la **partida**</span>
+                        <span class="vs">gano la <strong>partida</strong></span>
                     </div>
                 </div>
                 <div class="match-arrow">→</div>

@@ -5,28 +5,55 @@
     <nav v-if="isNavVisible" class="modern-nav">
       <div class="nav-content">
         <router-link to="/" class="nav-item">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" class="icon">
+            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            <polyline points="9 22 9 12 15 12 15 22" />
+          </svg>
           <span class="nav-label">Inicio</span>
         </router-link>
 
         <router-link to="/historial" class="nav-item">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" class="icon">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
+          </svg>
           <span class="nav-label">Partidas</span>
         </router-link>
 
         <div class="plus-center">
           <router-link to="/partida/nueva" class="action-fab" title="Nueva Partida">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="icon-plus"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="icon-plus">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
           </router-link>
         </div>
 
         <router-link to="/ranking" class="nav-item">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" class="icon">
+            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+            <path d="M4 22h16" />
+            <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+          </svg>
           <span class="nav-label">Ranking</span>
         </router-link>
 
         <router-link to="/mi-perfil" class="nav-item">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" class="icon">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
           <span class="nav-label">Perfil</span>
         </router-link>
       </div>
@@ -49,7 +76,40 @@ const isNavVisible = computed(() => {
 </script>
 
 <style>
-/* Contenedor Principal */
+/* 1. RESET Y CONFIGURACIÓN GLOBAL */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100vh;
+}
+
+body {
+  /* Degradado Morado muy oscuro hacia Negro para no interferir con la UI */
+  background-image:
+    linear-gradient(135deg, rgba(18, 10, 31, 0.92), rgba(2, 6, 23, 0.95)),
+    url('@/assets/Background.jpg');
+
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-color: #020617;
+  /* Fallback oscuro */
+  color: #f8fafc;
+  font-family: 'Inter', sans-serif;
+}
+
+/* 2. CONTENEDOR PRINCIPAL */
+#app-container {
+  width: 100%;
+  min-height: 100vh;
+  padding-bottom: 110px;
+  box-sizing: border-box;
+}
+
+/* 3. NAVEGACIÓN MODERNA */
 .modern-nav {
   position: fixed;
   bottom: 20px;
@@ -60,9 +120,8 @@ const isNavVisible = computed(() => {
   z-index: 10000;
 }
 
-/* La barra de cristal */
 .nav-content {
-  background: rgba(15, 23, 42, 0.8);
+  background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -72,17 +131,16 @@ const isNavVisible = computed(() => {
   align-items: center;
   padding: 10px 15px;
   height: 65px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
 }
 
-/* Items individuales */
 .nav-item {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-decoration: none;
-  color: #64748b; /* Color apagado */
+  color: #94a3b8;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   flex: 1;
@@ -104,9 +162,9 @@ const isNavVisible = computed(() => {
   transition: all 0.3s ease;
 }
 
-/* ESTADO ACTIVO: Animación mágica */
+/* ESTADO ACTIVO */
 .nav-item.router-link-active:not(.action-fab) {
-  color: #3b82f6;
+  color: #60a5fa;
 }
 
 .nav-item.router-link-active .nav-label {
@@ -116,10 +174,10 @@ const isNavVisible = computed(() => {
 
 .nav-item.router-link-active .icon {
   transform: translateY(-2px);
-  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
+  filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.5));
 }
 
-/* BOTÓN CENTRAL: El "Corazón" de la App */
+/* BOTÓN CENTRAL */
 .plus-center {
   position: relative;
   width: 70px;
@@ -128,17 +186,17 @@ const isNavVisible = computed(() => {
 
 .action-fab {
   position: absolute;
-  top: -35px; /* Lo elevamos un poco más */
+  top: -35px;
   left: 50%;
   transform: translateX(-50%);
   width: 58px;
   height: 58px;
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-  border-radius: 18px; /* Square-round style */
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+  border-radius: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.3);
   border: 4px solid #0f172a;
   color: white;
   transition: all 0.2s ease;
@@ -151,26 +209,18 @@ const isNavVisible = computed(() => {
 
 .action-fab:hover {
   transform: translateX(-50%) scale(1.05) translateY(-2px);
-  box-shadow: 0 12px 25px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 12px 25px rgba(124, 58, 237, 0.4);
 }
 
-.action-fab:active {
-  transform: translateX(-50%) scale(0.95);
-}
-
-/* Ajuste del contenido para no chocar con la Navbar */
-#app-container {
-  padding-bottom: 110px;
-}
-
-/* Optimizaciones para móvil */
+/* RESPONSIVE */
 @media (max-width: 480px) {
   .nav-content {
     height: 60px;
     padding: 5px 10px;
   }
+
   .nav-label {
-    display: none; /* En móviles muy pequeños ocultamos texto por espacio */
+    display: none;
   }
 }
 </style>
