@@ -112,10 +112,19 @@ const toggleColor = (code) => {
 }
 
 const openStats = async (deck) => {
-    const deckNameLower = deck.nombre_personalizado.toLowerCase();
-    const deckMatches = history.value.filter(h =>
-        h.deck_name_manual && h.deck_name_manual.toLowerCase() === deckNameLower
-    );
+    // 1. Definimos los nombres posibles que este mazo puede tener en el historial
+    const possibleNames = [
+        deck.nombre_personalizado?.toLowerCase(),
+        deck.comandante_nombre?.toLowerCase(),
+        deck.arquetipo_pauper?.toLowerCase()
+    ].filter(Boolean); // Eliminamos nulos o vacíos
+
+    // 2. Filtramos el historial buscando CUALQUIERA de esos nombres
+    const deckMatches = history.value.filter(h => {
+        if (!h.deck_name_manual) return false;
+        const recordedName = h.deck_name_manual.toLowerCase();
+        return possibleNames.includes(recordedName);
+    });
 
     if (deckMatches.length === 0) {
         selectedDeckStats.value = { ...deck, empty: true };
@@ -123,9 +132,11 @@ const openStats = async (deck) => {
         return;
     }
 
+    // 3. Cálculo de estadísticas basado en los encuentros encontrados
     const wins = deckMatches.filter(m => m.is_winner).length;
     const matchIds = deckMatches.map(m => m.match_id);
 
+    // 4. Obtenemos los oponentes de esas partidas específicas
     const { data: opponents } = await supabase
         .from('match_participants')
         .select('player_name_manual, is_winner, match_id')
@@ -138,8 +149,13 @@ const openStats = async (deck) => {
         const gameOpponents = opponents?.filter(o => o.match_id === dm.match_id) || [];
         gameOpponents.forEach(opp => {
             const name = opp.player_name_manual || 'Anónimo';
-            if (dm.is_winner) victimMap[name] = (victimMap[name] || 0) + 1;
-            else if (opp.is_winner) nemesisMap[name] = (nemesisMap[name] || 0) + 1;
+            if (dm.is_winner) {
+                // Si yo gané, él es mi víctima
+                victimMap[name] = (victimMap[name] || 0) + 1;
+            } else if (opp.is_winner) {
+                // Si él ganó, es mi némesis
+                nemesisMap[name] = (nemesisMap[name] || 0) + 1;
+            }
         });
     });
 

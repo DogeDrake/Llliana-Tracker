@@ -68,11 +68,22 @@ onMounted(async () => {
     }
 })
 
-// Lógica de análisis de mazo (Mejorada y Profesional)
+// Navegación a la partida específica
+const goToMatch = (matchId) => {
+    if (matchId) router.push(`/partida/${matchId}`)
+}
+
+// Lógica de análisis de mazo mejorada para otros usuarios
 const openStats = async (deck) => {
-    const deckNameLower = deck.nombre_personalizado.toLowerCase();
+    // Identificadores posibles del mazo en el historial manual
+    const searchTerms = [
+        deck.nombre_personalizado?.toLowerCase(),
+        deck.comandante_nombre?.toLowerCase(),
+        deck.arquetipo_pauper?.toLowerCase()
+    ].filter(Boolean);
+
     const deckMatches = history.value.filter(h =>
-        h.deck_name_manual && h.deck_name_manual.toLowerCase() === deckNameLower
+        h.deck_name_manual && searchTerms.includes(h.deck_name_manual.toLowerCase())
     );
 
     if (deckMatches.length === 0) {
@@ -177,7 +188,8 @@ const goBack = () => router.back()
             <section class="content-section">
                 <h2 class="section-title">Historial Reciente</h2>
                 <div class="history-list">
-                    <div v-for="entry in history" :key="entry.match_id" class="history-item">
+                    <button v-for="entry in history" :key="entry.match_id" class="history-item-clickable"
+                        @click="goToMatch(entry.match_id)">
                         <div class="h-date">{{ formatDate(entry.matches.fecha_partida) }}</div>
                         <div class="h-main">
                             <span class="h-deck">{{ entry.deck_name_manual || 'Mazo sin nombre' }}</span>
@@ -186,7 +198,14 @@ const goBack = () => router.back()
                         <div class="h-result" :class="entry.is_winner ? 'win' : 'loss'">
                             {{ entry.is_winner ? 'VICTORIA' : 'DERROTA' }}
                         </div>
-                    </div>
+                        <div class="h-action">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                                stroke-width="3">
+                                <path d="M9 18l6-6-6-6" />
+                            </svg>
+                        </div>
+                    </button>
+                    <div v-if="history.length === 0" class="empty-state-text">Sin registros de partidas.</div>
                 </div>
             </section>
         </div>
@@ -234,12 +253,12 @@ const goBack = () => router.back()
                     </div>
 
                     <div class="deck-info-footer"
-                        v-if="selectedDeckStats.commander_name || selectedDeckStats.archetype">
+                        v-if="selectedDeckStats.commander_name || selectedDeckStats.arquetipo_pauper">
                         <div v-if="selectedDeckStats.commander_name" class="footer-item">
                             <span class="label">Comandante:</span> {{ selectedDeckStats.commander_name }}
                         </div>
-                        <div v-if="selectedDeckStats.archetype" class="footer-item">
-                            <span class="label">Arquetipo:</span> {{ selectedDeckStats.archetype }}
+                        <div v-if="selectedDeckStats.arquetipo_pauper" class="footer-item">
+                            <span class="label">Arquetipo:</span> {{ selectedDeckStats.arquetipo_pauper }}
                         </div>
                         <div v-if="selectedDeckStats.color_identity" class="footer-item colors">
                             <span class="label">Identidad:</span> {{ selectedDeckStats.color_identity }}
@@ -260,7 +279,6 @@ const goBack = () => router.back()
 </template>
 
 <style scoped>
-/* Estilos Base Heredados del Perfil Personal */
 .profile-view-root {
     min-height: 100vh;
     color: white;
@@ -401,22 +419,7 @@ const goBack = () => router.back()
     font-weight: 800;
 }
 
-/* Grid de Mazos */
-.decks-layout-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 20px;
-}
-
-.section-title {
-    font-size: 1rem;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin: 40px 0 20px;
-}
-
-/* Historial */
+/* Historial Clicable */
 .history-list {
     background: rgba(30, 41, 59, 0.4);
     border-radius: 20px;
@@ -424,12 +427,23 @@ const goBack = () => router.back()
     overflow: hidden;
 }
 
-.history-item {
+.history-item-clickable {
     display: grid;
-    grid-template-columns: 85px 1fr auto;
+    grid-template-columns: 85px 1fr auto auto;
     align-items: center;
     padding: 18px 20px;
+    width: 100%;
+    background: transparent;
+    border: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    text-align: left;
+    color: white;
+    transition: all 0.2s ease;
+}
+
+.history-item-clickable:hover {
+    background: rgba(59, 130, 246, 0.1);
 }
 
 .h-date {
@@ -458,6 +472,13 @@ const goBack = () => router.back()
     padding: 6px 12px;
     border-radius: 8px;
     text-align: center;
+    margin-right: 15px;
+}
+
+.h-action {
+    color: #64748b;
+    display: flex;
+    align-items: center;
 }
 
 .win {
@@ -470,7 +491,22 @@ const goBack = () => router.back()
     color: #f87171;
 }
 
-/* MODALES MEJORADOS */
+/* Grid de Mazos */
+.decks-layout-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.section-title {
+    font-size: 1rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 40px 0 20px;
+}
+
+/* Modales */
 .modal-overlay {
     position: fixed;
     inset: 0;
@@ -493,6 +529,7 @@ const goBack = () => router.back()
 
 .stats-modal-large {
     max-width: 450px;
+    position: relative;
 }
 
 .header-indicator.stats {
@@ -622,13 +659,16 @@ const goBack = () => router.back()
     margin-right: 5px;
 }
 
-/* Error State */
-.error-state {
-    min-height: 80vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
+/* Botones y Otros */
+.close-btn-styled {
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    color: #64748b;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-weight: bold;
 }
 
 .btn-submit-magic {
@@ -640,6 +680,14 @@ const goBack = () => router.back()
     font-weight: 800;
     cursor: pointer;
     margin-top: 20px;
+}
+
+.error-state {
+    min-height: 80vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
 }
 
 /* Animaciones */
