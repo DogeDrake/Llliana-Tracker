@@ -45,12 +45,27 @@ const stats = reactive({
     winRate: 0
 })
 
-// --- LÓGICA DE EXPORTACIÓN CSV ---
+// --- LÓGICA DE EXPORTACIÓN CSV MODIFICADA ---
 const downloadCSV = async () => {
     try {
-        const matchIds = history.value.map(h => h.match_id);
+        // 1. Preguntar al usuario qué formato desea exportar
+        const userChoice = confirm("¿Deseas exportar solo las partidas de COMMANDER? (Cancelar para PAUPER)");
+        const selectedFormat = userChoice ? 'commander' : 'pauper';
 
-        // 1. Obtener participantes con los nombres correctos según tu esquema
+        // 2. Filtrar los mazos locales por formato
+        const filteredDecks = decks.value.filter(d => d.formato === selectedFormat);
+        
+        // 3. Filtrar el historial por formato
+        const filteredHistory = history.value.filter(h => h.matches?.formato === selectedFormat);
+
+        if (filteredHistory.length === 0 && filteredDecks.length === 0) {
+            alert(`No hay datos registrados para el formato ${selectedFormat.toUpperCase()}`);
+            return;
+        }
+
+        const matchIds = filteredHistory.map(h => h.match_id);
+
+        // 4. Obtener participantes (solo de las partidas filtradas)
         const { data: allParticipants } = await supabase
             .from('match_participants')
             .select(`
@@ -64,27 +79,26 @@ const downloadCSV = async () => {
             .in('match_id', matchIds);
 
         const SEP = ",";
-        let csvContent = "\uFEFF"; // BOM para que Excel detecte UTF-8
+        let csvContent = "\uFEFF"; // BOM para Excel
 
-        // --- SECCIÓN 1: MIS MAZOS ---
-        csvContent += `--- SECCION: MIS MAZOS ---\n`;
-        csvContent += `Nombre${SEP}Formato${SEP}Comandante/Arquetipo${SEP}Colores${SEP}Estado\n`;
+        // --- SECCIÓN 1: MIS MAZOS (FILTRADOS) ---
+        csvContent += `--- SECCION: MIS MAZOS (${selectedFormat.toUpperCase()}) ---\n`;
+        csvContent += `Nombre${SEP}Formato${SEP}Comandante/Arquetipo${SEP}Colores\n`;
 
-        decks.value.forEach(d => {
+        filteredDecks.forEach(d => {
             const extra = d.formato === 'commander' ? d.comandante_nombre : d.arquetipo_pauper;
             const row = [
                 d.nombre_personalizado,
                 d.formato,
                 extra || '',
-                d.color_identity || '',
-                d.is_active ? 'Activo' : 'Inactivo'
+                d.color_identity || ''
             ].map(text => `"${String(text).replace(/"/g, '""')}"`);
             csvContent += row.join(SEP) + "\n";
         });
 
         csvContent += "\n\n";
 
-        // --- SECCIÓN 2: HISTORIAL DE PARTIDAS ---
+        // --- SECCIÓN 2: HISTORIAL DE PARTIDAS (FILTRADAS) ---
         const maxOpponents = 3;
         let headerPartidas = `Fecha${SEP}Formato${SEP}Mazo Usado${SEP}Resultado`;
         for (let i = 1; i <= maxOpponents; i++) {
@@ -92,11 +106,11 @@ const downloadCSV = async () => {
         }
         headerPartidas += `${SEP}Winrate Mazo (Momento)${SEP}Winrate Global (Momento)\n`;
 
-        csvContent += `--- SECCION: HISTORIAL DE PARTIDAS ---\n`;
+        csvContent += `--- SECCION: HISTORIAL DE PARTIDAS (${selectedFormat.toUpperCase()}) ---\n`;
         csvContent += headerPartidas;
 
-        // Orden cronológico para los winrates progresivos
-        const chronologicalHistory = [...history.value].sort((a, b) =>
+        // Orden cronológico para winrates correctos
+        const chronologicalHistory = [...filteredHistory].sort((a, b) =>
             new Date(a.matches.fecha_partida) - new Date(b.matches.fecha_partida)
         );
 
@@ -108,18 +122,15 @@ const downloadCSV = async () => {
             const myDeck = match.deck_name_manual || 'Desconocido';
             const isWin = match.is_winner;
 
-            // Lógica de Winrates
             if (isWin) globalWins++;
             const currentGlobalWinrate = ((globalWins / (index + 1)) * 100).toFixed(2);
             deckTotalCounter[myDeck] = (deckTotalCounter[myDeck] || 0) + 1;
             if (isWin) deckWinsCounter[myDeck] = (deckWinsCounter[myDeck] || 0) + 1;
             const currentDeckWinrate = ((deckWinsCounter[myDeck] / deckTotalCounter[myDeck]) * 100).toFixed(2);
 
-            // Filtrar oponentes de esta partida (excluyéndote a ti)
             const opponentsData = allParticipants
                 ?.filter(p => p.match_id === match.match_id && p.player_name_manual !== profile.value.username)
                 .map(p => {
-                    // Según tu esquema: profiles.username (el @) y profiles.display_name (nombre real)
                     let displayName = p.player_name_manual;
                     if (p.profiles) {
                         const nick = p.profiles.username;
@@ -129,15 +140,16 @@ const downloadCSV = async () => {
                     return { name: displayName, deck: p.deck_name_manual || '?' };
                 }) || [];
 
-            // Construir fila
+            // Formatear fecha: Solo día/mes/año
+            const soloFecha = new Date(match.matches.fecha_partida).toLocaleDateString('es-ES');
+
             let rowArray = [
-                new Date(match.matches.fecha_partida).toLocaleString(), // Fecha legible
+                soloFecha, // Sin hora
                 match.matches.formato,
                 myDeck,
                 isWin ? "VICTORIA" : "DERROTA"
             ];
 
-            // Columnas de rivales
             for (let i = 0; i < maxOpponents; i++) {
                 if (opponentsData[i]) {
                     rowArray.push(opponentsData[i].name);
@@ -154,12 +166,11 @@ const downloadCSV = async () => {
             csvContent += rowArray.map(text => `"${String(text).replace(/"/g, '""')}"`).join(SEP) + "\n";
         });
 
-        // 3. Ejecutar descarga
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `Reporte_Partidas_${profile.value.username}.csv`;
+        link.download = `Reporte_${selectedFormat.toUpperCase()}_${profile.value.username}.csv`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -383,7 +394,7 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
                     </div>
                     <div class="hero-text">
                         <h1 class="username-title">{{ profile.username }}</h1>
-                        <p class="rank-subtitle">Planeswalker Registrado</p>
+                        <p class="rank-subtitle">{{ profile.bio }}</p>
                     </div>
                 </div>
 
