@@ -17,6 +17,7 @@ const isSubmitting = ref(false)
 const showAddDeck = ref(false)
 const showEditAvatar = ref(false)
 const showDeckStats = ref(false)
+const showExportModal = ref(false)
 
 const newAvatarUrl = ref('')
 const selectedDeckStats = ref(null)
@@ -45,17 +46,12 @@ const stats = reactive({
     winRate: 0
 })
 
-const showExportModal = ref(false)
-
-// --- LÓGICA DE EXPORTACIÓN CSV MODIFICADA (Sin columna Formato) ---
+// --- LÓGICA DE EXPORTACIÓN CSV ---
 const downloadCSV = async (selectedFormat) => {
     try {
         showExportModal.value = false;
 
-        // 1. Filtrar los mazos locales por formato
         const filteredDecks = decks.value.filter(d => d.formato === selectedFormat);
-        
-        // 2. Filtrar el historial por formato
         const filteredHistory = history.value.filter(h => h.matches?.formato === selectedFormat);
 
         if (filteredHistory.length === 0 && filteredDecks.length === 0) {
@@ -65,7 +61,6 @@ const downloadCSV = async (selectedFormat) => {
 
         const matchIds = filteredHistory.map(h => h.match_id);
 
-        // 3. Obtener participantes
         const { data: allParticipants } = await supabase
             .from('match_participants')
             .select(`
@@ -81,16 +76,13 @@ const downloadCSV = async (selectedFormat) => {
         const SEP = ",";
         let csvContent = "\uFEFF"; // BOM para Excel
 
-        // --- SECCIÓN 1: MIS MAZOS (FILTRADOS) ---
         csvContent += `--- SECCION: MIS MAZOS (${selectedFormat.toUpperCase()}) ---\n`;
-        // Eliminado "Formato" de la cabecera
         csvContent += `Nombre${SEP}Comandante/Arquetipo${SEP}Colores\n`;
 
         filteredDecks.forEach(d => {
             const extra = d.formato === 'commander' ? d.comandante_nombre : d.arquetipo_pauper;
             const row = [
                 d.nombre_personalizado,
-                // d.formato, <-- Eliminado
                 extra || '',
                 d.color_identity || ''
             ].map(text => `"${String(text).replace(/"/g, '""')}"`);
@@ -99,9 +91,7 @@ const downloadCSV = async (selectedFormat) => {
 
         csvContent += "\n\n";
 
-        // --- SECCIÓN 2: HISTORIAL DE PARTIDAS (FILTRADAS) ---
         const maxOpponents = 3;
-        // Eliminado "Formato" de la cabecera de partidas
         let headerPartidas = `Fecha${SEP}Mazo Usado${SEP}Resultado`;
         for (let i = 1; i <= maxOpponents; i++) {
             headerPartidas += `${SEP}Rival ${i}${SEP}Mazo Rival ${i}`;
@@ -145,7 +135,6 @@ const downloadCSV = async (selectedFormat) => {
 
             let rowArray = [
                 soloFecha,
-                // match.matches.formato, <-- Eliminado
                 myDeck,
                 isWin ? "VICTORIA" : "DERROTA"
             ];
@@ -166,7 +155,6 @@ const downloadCSV = async (selectedFormat) => {
             csvContent += rowArray.map(text => `"${String(text).replace(/"/g, '""')}"`).join(SEP) + "\n";
         });
 
-        // 4. Descarga del archivo
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -182,6 +170,120 @@ const downloadCSV = async (selectedFormat) => {
         alert("No se pudo generar el CSV");
     }
 }
+
+// --- NUEVA LÓGICA DE IMPORTACIÓN CSV ---
+
+const triggerImport = (format) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv';
+    input.onchange = (e) => processImport(e, format);
+    input.click();
+};
+
+const processImport = async (event, selectedFormat) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const content = e.target.result;
+        const rows = content.split('\n')
+            .map(line => {
+                const columns = [];
+                let current = '';
+                let inQuotes = false;
+                for (let char of line) {
+                    if (char === '"') inQuotes = !inQuotes;
+                    else if (char === ',' && !inQuotes) {
+                        columns.push(current.trim());
+                        current = '';
+                    } else current += char;
+                }
+                columns.push(current.trim());
+                return columns.map(col => col.replace(/^"|"$/g, '').replace(/""/g, '"'));
+            })
+            .filter(row => row.length > 5 && row[0].toLowerCase() !== 'fecha');
+
+        if (rows.length === 0) {
+            alert("No se encontraron datos válidos en el CSV.");
+            return;
+        }
+
+        isSubmitting.value = true;
+        let importedCount = 0;
+
+        try {
+            for (const row of rows) {
+                const fechaStr = row[0];
+                if (!fechaStr) continue;
+
+                // Convertir fecha DD/MM/YYYY a YYYY-MM-DD
+                const [d, m, y] = fechaStr.split('/');
+                const fechaISO = `${y}-${m}-${d}`;
+
+                // 1. Crear la Partida
+                const { data: matchData, error: mErr } = await supabase
+                    .from('matches')
+                    .insert([{ 
+                        fecha_partida: fechaISO, 
+                        formato: selectedFormat 
+                    }])
+                    .select()
+                    .single();
+
+                if (mErr) throw mErr;
+                const matchId = matchData.id;
+
+                // 2. Preparar Participantes
+                const participants = [];
+                const ganadorTexto = row[9];
+
+                // Yo (Usuario)
+                participants.push({
+                    match_id: matchId,
+                    player_name_manual: profile.value.username,
+                    deck_name_manual: row[2],
+                    is_winner: row[11]?.toUpperCase() === 'VICTORIA',
+                    user_id: profile.value.id
+                });
+
+                // Rivales (Columnas 3-4, 5-6, 7-8)
+                const rivalIndices = [[3, 4], [5, 6], [7, 8]];
+                rivalIndices.forEach(([nameIdx, deckIdx]) => {
+                    const rName = row[nameIdx];
+                    const rDeck = row[deckIdx];
+                    if (rName || rDeck) {
+                        participants.push({
+                            match_id: matchId,
+                            player_name_manual: rName || 'Oponente',
+                            deck_name_manual: rDeck || 'Desconocido',
+                            is_winner: (ganadorTexto === rName || ganadorTexto === rDeck) && ganadorTexto !== ""
+                        });
+                    }
+                });
+
+                const { error: pErr } = await supabase
+                    .from('match_participants')
+                    .insert(participants);
+
+                if (pErr) throw pErr;
+                importedCount++;
+            }
+
+            alert(`¡Éxito! Se han importado ${importedCount} partidas.`);
+            showExportModal.value = false;
+            await fetchStatsAndHistory(profile.value.id, profile.value.username);
+            
+        } catch (err) {
+            console.error("Error en importación:", err);
+            alert("Error al importar fila: " + err.message);
+        } finally {
+            isSubmitting.value = false;
+        }
+    };
+    reader.readAsText(file);
+};
 
 // --- LÓGICA EXISTENTE ---
 onMounted(async () => {
@@ -368,7 +470,7 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
                 <nav class="top-bar">
                     <span class="brand">LILLIANA TRACKER</span>
                     <div class="header-actions">
-                        <button @click="showExportModal = true" class="export-btn" title="Descargar Reporte CSV">
+                        <button @click="showExportModal = true" class="export-btn" title="Gestionar Datos CSV">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                 stroke-linejoin="round">
@@ -376,7 +478,7 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
                                 <polyline points="7 10 12 15 17 10" />
                                 <line x1="12" y1="15" x2="12" y2="3" />
                             </svg>
-                            Reporte
+                            Datos
                         </button>
                         <button @click="handleLogout" class="logout-btn">Cerrar Sesión</button>
                     </div>
@@ -448,29 +550,37 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
         </div>
 
         <div v-if="showAddDeck || showEditAvatar || showDeckStats || showExportModal" class="modal-overlay"
-            @click.self="showAddDeck = false; showEditAvatar = false; showDeckStats = false">
-<div v-if="showExportModal" class="modal-content glass-modal export-selection-modal fade-in-up">
-    <div class="modal-header">
-        <h3>EXPORTAR DATOS</h3>
-        <button @click="showExportModal = false" class="close-btn-styled">✕</button>
-    </div>
-    
-    <p class="modal-intro-text">Selecciona el formato de las partidas que deseas exportar a CSV:</p>
-    
-    <div class="export-options-grid">
-        <button @click="downloadCSV('commander')" class="export-option-card commander-opt">
-            <span class="opt-icon">👑</span>
-            <span class="opt-title">Commander</span>
-            <span class="opt-desc">Exportar mis mazos y partidas de 100 cartas.</span>
-        </button>
+            @click.self="showAddDeck = false; showEditAvatar = false; showDeckStats = false; showExportModal = false">
+            
+            <div v-if="showExportModal" class="modal-content glass-modal export-selection-modal fade-in-up">
+                <div class="modal-header">
+                    <h3>GESTIONAR DATOS (CSV)</h3>
+                    <button @click="showExportModal = false" class="close-btn-styled">✕</button>
+                </div>
+                
+                <p class="modal-intro-text">¿Qué deseas hacer con tus registros de partidas?</p>
+                
+                <div class="export-options-grid">
+                    <div class="format-action-card">
+                        <span class="opt-icon">👑</span>
+                        <span class="opt-title">Commander</span>
+                        <div class="action-buttons-row">
+                            <button @click="downloadCSV('commander')" class="btn-mini-action export">Exportar</button>
+                            <button @click="triggerImport('commander')" class="btn-mini-action import">Importar</button>
+                        </div>
+                    </div>
 
-        <button @click="downloadCSV('pauper')" class="export-option-card pauper-opt">
-            <span class="opt-icon">🛡️</span>
-            <span class="opt-title">Pauper</span>
-            <span class="opt-desc">Exportar registros de mazos y partidas Common-only.</span>
-        </button>
-    </div>
-</div>
+                    <div class="format-action-card">
+                        <span class="opt-icon">🛡️</span>
+                        <span class="opt-title">Pauper</span>
+                        <div class="action-buttons-row">
+                            <button @click="downloadCSV('pauper')" class="btn-mini-action export">Exportar</button>
+                            <button @click="triggerImport('pauper')" class="btn-mini-action import">Importar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div v-if="showDeckStats" class="modal-content glass-modal stats-modal-large fade-in-up">
                 <div class="modal-header">
                     <div class="header-titles">
@@ -495,14 +605,12 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
                         <div class="rival-row nemesis">
                             <span class="r-tag">NÉMESIS</span>
                             <span class="r-name">{{ selectedDeckStats.nemesis[0] || '---' }}</span>
-                            <span class="r-count" v-if="selectedDeckStats.nemesis[0]">x{{ selectedDeckStats.nemesis[1]
-                                }}</span>
+                            <span class="r-count" v-if="selectedDeckStats.nemesis[0]">x{{ selectedDeckStats.nemesis[1] }}</span>
                         </div>
                         <div class="rival-row victim">
                             <span class="r-tag">VÍCTIMA</span>
                             <span class="r-name">{{ selectedDeckStats.victim[0] || '---' }}</span>
-                            <span class="r-count" v-if="selectedDeckStats.victim[0]">x{{ selectedDeckStats.victim[1]
-                                }}</span>
+                            <span class="r-count" v-if="selectedDeckStats.victim[0]">x{{ selectedDeckStats.victim[1] }}</span>
                         </div>
                     </div>
                 </div>
@@ -527,7 +635,7 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
                             <div class="color-picker-mini">
                                 <button v-for="c in colorOptions" :key="c.code" @click="toggleColor(c.code)"
                                     :class="['color-btn', { active: newDeck.color_identity.includes(c.code) }]">{{
-        c.symbol }}</button>
+                                        c.symbol }}</button>
                             </div>
                         </div>
                     </div>
@@ -538,8 +646,7 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
                             v-model="newDeck.arquetipo_pauper" class="magic-input blue-border" /></div>
                     <div class="input-group"><label>Imagen (URL)</label><input v-model="newDeck.image_url"
                             class="magic-input" /></div>
-                    <button @click="createDeck" class="btn-submit-magic" :disabled="isSubmitting">REGISTRAR
-                        MAZO</button>
+                    <button @click="createDeck" class="btn-submit-magic" :disabled="isSubmitting">REGISTRAR MAZO</button>
                 </div>
             </div>
 
@@ -1281,5 +1388,50 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
 /* Ajuste para que el modal no sea demasiado ancho */
 .export-selection-modal {
     max-width: 450px !important;
+}
+    .format-action-card {
+    background: rgba(30, 41, 59, 0.5);
+    padding: 20px;
+    border-radius: 18px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.action-buttons-row {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+
+.btn-mini-action {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 0.65rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: none;
+    transition: 0.2s;
+}
+
+.btn-mini-action.export {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-mini-action.import {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    border: 1px solid #10b981;
+}
+
+.btn-mini-action:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.2);
 }
 </style>
