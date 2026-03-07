@@ -11,6 +11,7 @@ const profile = ref(null)
 const decks = ref([])
 const history = ref([])
 const loading = ref(true)
+const errorMsg = ref(null) // Para debug si algo falla
 const isSubmitting = ref(false)
 
 // Modales
@@ -50,7 +51,6 @@ const stats = reactive({
 const downloadCSV = async (selectedFormat) => {
     try {
         showExportModal.value = false;
-
         const filteredDecks = decks.value.filter(d => d.formato === selectedFormat);
         const filteredHistory = history.value.filter(h => h.matches?.formato === selectedFormat);
 
@@ -60,51 +60,33 @@ const downloadCSV = async (selectedFormat) => {
         }
 
         const matchIds = filteredHistory.map(h => h.match_id);
-
         const { data: allParticipants } = await supabase
             .from('match_participants')
-            .select(`
-                match_id, 
-                player_name_manual, 
-                deck_name_manual, 
-                is_winner,
-                user_id,
-                profiles (username, display_name)
-            `)
+            .select(`match_id, player_name_manual, deck_name_manual, is_winner, user_id, profiles(username, display_name)`)
             .in('match_id', matchIds);
 
         const SEP = ",";
-        let csvContent = "\uFEFF"; // BOM para Excel
+        let csvContent = "\uFEFF"; 
 
         csvContent += `--- SECCION: MIS MAZOS (${selectedFormat.toUpperCase()}) ---\n`;
         csvContent += `Nombre${SEP}Comandante/Arquetipo${SEP}Colores\n`;
 
         filteredDecks.forEach(d => {
             const extra = d.formato === 'commander' ? d.comandante_nombre : d.arquetipo_pauper;
-            const row = [
-                d.nombre_personalizado,
-                extra || '',
-                d.color_identity || ''
-            ].map(text => `"${String(text).replace(/"/g, '""')}"`);
-            csvContent += row.join(SEP) + "\n";
+            const row = [d.nombre_personalizado, extra || '', d.color_identity || ''];
+            csvContent += row.map(text => `"${String(text).replace(/"/g, '""')}"`).join(SEP) + "\n";
         });
 
         csvContent += "\n\n";
-
         const maxOpponents = 3;
         let headerPartidas = `Fecha${SEP}Mazo Usado${SEP}Resultado`;
-        for (let i = 1; i <= maxOpponents; i++) {
-            headerPartidas += `${SEP}Rival ${i}${SEP}Mazo Rival ${i}`;
-        }
+        for (let i = 1; i <= maxOpponents; i++) { headerPartidas += `${SEP}Rival ${i}${SEP}Mazo Rival ${i}`; }
         headerPartidas += `${SEP}Winrate Mazo (Momento)${SEP}Winrate Global (Momento)\n`;
 
         csvContent += `--- SECCION: HISTORIAL DE PARTIDAS (${selectedFormat.toUpperCase()}) ---\n`;
         csvContent += headerPartidas;
 
-        const chronologicalHistory = [...filteredHistory].sort((a, b) =>
-            new Date(a.matches.fecha_partida) - new Date(b.matches.fecha_partida)
-        );
-
+        const chronologicalHistory = [...filteredHistory].sort((a, b) => new Date(a.matches.fecha_partida) - new Date(b.matches.fecha_partida));
         let globalWins = 0;
         const deckWinsCounter = {};
         const deckTotalCounter = {};
@@ -112,46 +94,29 @@ const downloadCSV = async (selectedFormat) => {
         chronologicalHistory.forEach((match, index) => {
             const myDeck = match.deck_name_manual || 'Desconocido';
             const isWin = match.is_winner;
-
             if (isWin) globalWins++;
             const currentGlobalWinrate = ((globalWins / (index + 1)) * 100).toFixed(2);
             deckTotalCounter[myDeck] = (deckTotalCounter[myDeck] || 0) + 1;
             if (isWin) deckWinsCounter[myDeck] = (deckWinsCounter[myDeck] || 0) + 1;
             const currentDeckWinrate = ((deckWinsCounter[myDeck] / deckTotalCounter[myDeck]) * 100).toFixed(2);
 
-            const opponentsData = allParticipants
-                ?.filter(p => p.match_id === match.match_id && p.player_name_manual !== profile.value.username)
-                .map(p => {
-                    let displayName = p.player_name_manual;
-                    if (p.profiles) {
-                        const nick = p.profiles.username;
-                        const real = p.profiles.display_name;
-                        displayName = real ? `${nick} (${real})` : nick;
-                    }
-                    return { name: displayName, deck: p.deck_name_manual || '?' };
-                }) || [];
+            const opponentsData = allParticipants?.filter(p => p.match_id === match.match_id && p.player_name_manual !== profile.value.username).map(p => {
+                let displayName = p.player_name_manual;
+                if (p.profiles) {
+                    const nick = p.profiles.username;
+                    const real = p.profiles.display_name;
+                    displayName = real ? `${nick} (${real})` : nick;
+                }
+                return { name: displayName, deck: p.deck_name_manual || '?' };
+            }) || [];
 
             const soloFecha = new Date(match.matches.fecha_partida).toLocaleDateString('es-ES');
-
-            let rowArray = [
-                soloFecha,
-                myDeck,
-                isWin ? "VICTORIA" : "DERROTA"
-            ];
-
+            let rowArray = [soloFecha, myDeck, isWin ? "VICTORIA" : "DERROTA"];
             for (let i = 0; i < maxOpponents; i++) {
-                if (opponentsData[i]) {
-                    rowArray.push(opponentsData[i].name);
-                    rowArray.push(opponentsData[i].deck);
-                } else {
-                    rowArray.push("");
-                    rowArray.push("");
-                }
+                if (opponentsData[i]) { rowArray.push(opponentsData[i].name, opponentsData[i].deck); } 
+                else { rowArray.push("", ""); }
             }
-
-            rowArray.push(`${currentDeckWinrate}%`);
-            rowArray.push(`${currentGlobalWinrate}%`);
-
+            rowArray.push(`${currentDeckWinrate}%`, `${currentGlobalWinrate}%`);
             csvContent += rowArray.map(text => `"${String(text).replace(/"/g, '""')}"`).join(SEP) + "\n";
         });
 
@@ -160,19 +125,11 @@ const downloadCSV = async (selectedFormat) => {
         const link = document.createElement("a");
         link.href = url;
         link.download = `Reporte_${selectedFormat.toUpperCase()}_${profile.value.username}.csv`;
-        document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-    } catch (err) {
-        console.error("Error en exportación:", err);
-        alert("No se pudo generar el CSV");
-    }
+    } catch (err) { alert("No se pudo generar el CSV"); }
 }
 
-// --- NUEVA LÓGICA DE IMPORTACIÓN CSV ---
-
+// --- LÓGICA DE IMPORTACIÓN CSV ---
 const triggerImport = (format) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -188,8 +145,10 @@ const processImport = async (event, selectedFormat) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
         const content = e.target.result;
-        const rows = content.split('\n')
-            .map(line => {
+        // Parsing más robusto para manejar saltos de línea de Windows (\r\n)
+        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
+        
+        const rows = lines.map(line => {
                 const columns = [];
                 let current = '';
                 let inQuotes = false;
@@ -206,7 +165,7 @@ const processImport = async (event, selectedFormat) => {
             .filter(row => row.length > 5 && row[0].toLowerCase() !== 'fecha');
 
         if (rows.length === 0) {
-            alert("No se encontraron datos válidos en el CSV.");
+            alert("No se encontraron partidas válidas en el CSV.");
             return;
         }
 
@@ -218,44 +177,35 @@ const processImport = async (event, selectedFormat) => {
                 const fechaStr = row[0];
                 if (!fechaStr) continue;
 
-                // Convertir fecha DD/MM/YYYY a YYYY-MM-DD
                 const [d, m, y] = fechaStr.split('/');
                 const fechaISO = `${y}-${m}-${d}`;
 
                 // 1. Crear la Partida
                 const { data: matchData, error: mErr } = await supabase
                     .from('matches')
-                    .insert([{ 
-                        fecha_partida: fechaISO, 
-                        formato: selectedFormat 
-                    }])
-                    .select()
-                    .single();
+                    .insert([{ fecha_partida: fechaISO, formato: selectedFormat }])
+                    .select().single();
 
                 if (mErr) throw mErr;
-                const matchId = matchData.id;
 
-                // 2. Preparar Participantes
+                // 2. Participantes
                 const participants = [];
                 const ganadorTexto = row[9];
 
-                // Yo (Usuario)
                 participants.push({
-                    match_id: matchId,
+                    match_id: matchData.id,
                     player_name_manual: profile.value.username,
                     deck_name_manual: row[2],
                     is_winner: row[11]?.toUpperCase() === 'VICTORIA',
                     user_id: profile.value.id
                 });
 
-                // Rivales (Columnas 3-4, 5-6, 7-8)
-                const rivalIndices = [[3, 4], [5, 6], [7, 8]];
-                rivalIndices.forEach(([nameIdx, deckIdx]) => {
+                [[3, 4], [5, 6], [7, 8]].forEach(([nameIdx, deckIdx]) => {
                     const rName = row[nameIdx];
                     const rDeck = row[deckIdx];
                     if (rName || rDeck) {
                         participants.push({
-                            match_id: matchId,
+                            match_id: matchData.id,
                             player_name_manual: rName || 'Oponente',
                             deck_name_manual: rDeck || 'Desconocido',
                             is_winner: (ganadorTexto === rName || ganadorTexto === rDeck) && ganadorTexto !== ""
@@ -263,21 +213,15 @@ const processImport = async (event, selectedFormat) => {
                     }
                 });
 
-                const { error: pErr } = await supabase
-                    .from('match_participants')
-                    .insert(participants);
-
+                const { error: pErr } = await supabase.from('match_participants').insert(participants);
                 if (pErr) throw pErr;
                 importedCount++;
             }
-
             alert(`¡Éxito! Se han importado ${importedCount} partidas.`);
             showExportModal.value = false;
             await fetchStatsAndHistory(profile.value.id, profile.value.username);
-            
         } catch (err) {
-            console.error("Error en importación:", err);
-            alert("Error al importar fila: " + err.message);
+            alert("Error al importar: " + err.message);
         } finally {
             isSubmitting.value = false;
         }
@@ -285,7 +229,7 @@ const processImport = async (event, selectedFormat) => {
     reader.readAsText(file);
 };
 
-// --- LÓGICA EXISTENTE ---
+// --- CICLO DE VIDA ---
 onMounted(async () => {
     try {
         loading.value = true
@@ -311,6 +255,7 @@ onMounted(async () => {
 
     } catch (err) {
         console.error("Error crítico:", err.message)
+        errorMsg.value = "No se pudo cargar tu perfil. Asegúrate de estar registrado correctamente."
     } finally {
         loading.value = false
     }
@@ -320,10 +265,7 @@ const fetchStatsAndHistory = async (userId, username) => {
     try {
         const { data, error } = await supabase
             .from('match_participants')
-            .select(`
-                is_winner, deck_name_manual, player_name_manual, match_id,
-                matches (id, fecha_partida, formato)
-            `)
+            .select(`is_winner, deck_name_manual, player_name_manual, match_id, matches(id, fecha_partida, formato)`)
             .or(`user_id.eq.${userId},player_name_manual.ilike.${username}`)
             .order('created_at', { ascending: false })
 
@@ -335,33 +277,19 @@ const fetchStatsAndHistory = async (userId, username) => {
             stats.totalMatches = total
             stats.winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : 0
         }
-    } catch (e) {
-        console.warn("Error historial/stats:", e.message)
-    }
+    } catch (e) { console.warn("Error historial:", e.message) }
 }
 
-const goToMatch = (matchId) => {
-    if (matchId) router.push(`/partida/${matchId}`)
-}
-
-const toggleColor = (code) => {
-    const index = newDeck.color_identity.indexOf(code)
-    if (index > -1) newDeck.color_identity.splice(index, 1)
-    else newDeck.color_identity.push(code)
+const goToMatch = (id) => router.push(`/partida/${id}`)
+const toggleColor = (c) => {
+    const i = newDeck.color_identity.indexOf(c);
+    if (i > -1) newDeck.color_identity.splice(i, 1);
+    else newDeck.color_identity.push(c);
 }
 
 const openStats = async (deck) => {
-    const possibleNames = [
-        deck.nombre_personalizado?.toLowerCase(),
-        deck.comandante_nombre?.toLowerCase(),
-        deck.arquetipo_pauper?.toLowerCase()
-    ].filter(Boolean);
-
-    const deckMatches = history.value.filter(h => {
-        if (!h.deck_name_manual) return false;
-        const recordedName = h.deck_name_manual.toLowerCase();
-        return possibleNames.includes(recordedName);
-    });
+    const possibleNames = [deck.nombre_personalizado?.toLowerCase(), deck.comandante_nombre?.toLowerCase(), deck.arquetipo_pauper?.toLowerCase()].filter(Boolean);
+    const deckMatches = history.value.filter(h => h.deck_name_manual && possibleNames.includes(h.deck_name_manual.toLowerCase()));
 
     if (deckMatches.length === 0) {
         selectedDeckStats.value = { ...deck, empty: true };
@@ -371,36 +299,19 @@ const openStats = async (deck) => {
 
     const wins = deckMatches.filter(m => m.is_winner).length;
     const matchIds = deckMatches.map(m => m.match_id);
-
-    const { data: opponents } = await supabase
-        .from('match_participants')
-        .select('player_name_manual, is_winner, match_id')
-        .in('match_id', matchIds)
-        .neq('player_name_manual', profile.value.username);
+    const { data: opponents } = await supabase.from('match_participants').select('player_name_manual, is_winner, match_id').in('match_id', matchIds).neq('player_name_manual', profile.value.username);
 
     const nemesisMap = {}, victimMap = {};
-
     deckMatches.forEach(dm => {
-        const gameOpponents = opponents?.filter(o => o.match_id === dm.match_id) || [];
-        gameOpponents.forEach(opp => {
+        opponents?.filter(o => o.match_id === dm.match_id).forEach(opp => {
             const name = opp.player_name_manual || 'Anónimo';
-            if (dm.is_winner) {
-                victimMap[name] = (victimMap[name] || 0) + 1;
-            } else if (opp.is_winner) {
-                nemesisMap[name] = (nemesisMap[name] || 0) + 1;
-            }
+            if (dm.is_winner) victimMap[name] = (victimMap[name] || 0) + 1;
+            else if (opp.is_winner) nemesisMap[name] = (nemesisMap[name] || 0) + 1;
         });
     });
 
     const getTop = (obj) => Object.entries(obj).sort((a, b) => b[1] - a[1])[0] || [null, 0];
-
-    selectedDeckStats.value = {
-        ...deck,
-        total: deckMatches.length,
-        winRate: ((wins / deckMatches.length) * 100).toFixed(1),
-        nemesis: getTop(nemesisMap),
-        victim: getTop(victimMap)
-    };
+    selectedDeckStats.value = { ...deck, total: deckMatches.length, winRate: ((wins / deckMatches.length) * 100).toFixed(1), nemesis: getTop(nemesisMap), victim: getTop(victimMap) };
     showDeckStats.value = true;
 }
 
@@ -408,13 +319,12 @@ const createDeck = async () => {
     if (!newDeck.nombre_personalizado) return
     isSubmitting.value = true
     try {
-        const { data: { user } } = await supabase.auth.getUser()
         const payload = {
             nombre_personalizado: newDeck.nombre_personalizado,
             formato: newDeck.formato,
             decklist_url: newDeck.decklist_url,
             image_url: newDeck.image_url,
-            user_id: user.id,
+            user_id: profile.value.id,
             color_identity: newDeck.color_identity.join(','),
             comandante_nombre: newDeck.formato === 'commander' ? newDeck.comandante_nombre : null,
             arquetipo_pauper: newDeck.formato === 'pauper' ? newDeck.arquetipo_pauper : null
@@ -424,44 +334,37 @@ const createDeck = async () => {
         decks.value.unshift(data[0])
         showAddDeck.value = false
         resetForm()
-    } catch (err) {
-        alert("Error al crear: " + err.message)
-    } finally {
-        isSubmitting.value = false
-    }
+    } catch (err) { alert(err.message) } finally { isSubmitting.value = false }
 }
 
 const resetForm = () => {
-    Object.assign(newDeck, {
-        nombre_personalizado: '', decklist_url: '', image_url: '',
-        formato: 'commander', comandante_nombre: '', arquetipo_pauper: '', color_identity: []
-    })
+    Object.assign(newDeck, { nombre_personalizado: '', decklist_url: '', image_url: '', formato: 'commander', comandante_nombre: '', arquetipo_pauper: '', color_identity: [] })
 }
 
 const updateAvatar = async () => {
     if (!newAvatarUrl.value) return
     isSubmitting.value = true
     try {
-        const { data: { user } } = await supabase.auth.getUser()
-        await supabase.from('profiles').update({ avatar_url: newAvatarUrl.value }).eq('id', user.id)
+        await supabase.from('profiles').update({ avatar_url: newAvatarUrl.value }).eq('id', profile.value.id)
         profile.value.avatar_url = newAvatarUrl.value
         showEditAvatar.value = false
-    } catch (err) {
-        alert(err.message)
-    } finally {
-        isSubmitting.value = false
-    }
+    } catch (err) { alert(err.message) } finally { isSubmitting.value = false }
 }
 
-const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '---'
-const openDecklist = (url) => { if (url) window.open(url, '_blank') }
-async function handleLogout() { await supabase.auth.signOut(); router.push('/') }
+const formatDate = (d) => d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '---'
+const openDecklist = (url) => url && window.open(url, '_blank')
+const handleLogout = async () => { await supabase.auth.signOut(); router.push('/') }
 </script>
 
 <template>
     <div v-if="loading" class="loading-overlay">
         <div class="spinner"></div>
         <p class="invoking-text">Invocando perfil...</p>
+    </div>
+
+    <div v-else-if="errorMsg" class="error-container">
+        <p>{{ errorMsg }}</p>
+        <button @click="handleLogout" class="logout-btn">Reintentar / Salir</button>
     </div>
 
     <div v-else-if="profile" class="profile-view-root">
@@ -471,13 +374,7 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
                     <span class="brand">LILLIANA TRACKER</span>
                     <div class="header-actions">
                         <button @click="showExportModal = true" class="export-btn" title="Gestionar Datos CSV">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                stroke-linejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="7 10 12 15 17 10" />
-                                <line x1="12" y1="15" x2="12" y2="3" />
-                            </svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
                             Datos
                         </button>
                         <button @click="handleLogout" class="logout-btn">Cerrar Sesión</button>
@@ -489,31 +386,20 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
                         <div v-if="profile.avatar_url" class="avatar-image-container">
                             <img :src="profile.avatar_url" class="avatar-image" />
                         </div>
-                        <div v-else class="avatar-circle">
-                            {{ profile.username?.charAt(0).toUpperCase() }}
-                        </div>
+                        <div v-else class="avatar-circle">{{ profile.username?.charAt(0).toUpperCase() }}</div>
                         <div class="avatar-glow"></div>
                         <div class="edit-overlay"><span>EDITAR</span></div>
                     </div>
                     <div class="hero-text">
                         <h1 class="username-title">{{ profile.username }}</h1>
-                        <p class="rank-subtitle">{{ profile.bio }}</p>
+                        <p class="rank-subtitle">{{ profile.bio || 'Planeswalker' }}</p>
                     </div>
                 </div>
 
                 <div class="quick-stats-row">
-                    <div class="q-stat">
-                        <span class="q-num">{{ decks.length }}</span>
-                        <span class="q-label">Mazos</span>
-                    </div>
-                    <div class="q-stat">
-                        <span class="q-num">{{ stats.totalMatches }}</span>
-                        <span class="q-label">Partidas</span>
-                    </div>
-                    <div class="q-stat">
-                        <span class="q-num">{{ stats.winRate }}%</span>
-                        <span class="q-label">Win Rate</span>
-                    </div>
+                    <div class="q-stat"><span class="q-num">{{ decks.length }}</span><span class="q-label">Mazos</span></div>
+                    <div class="q-stat"><span class="q-num">{{ stats.totalMatches }}</span><span class="q-label">Partidas</span></div>
+                    <div class="q-stat"><span class="q-num">{{ stats.winRate }}%</span><span class="q-label">Win Rate</span></div>
                 </div>
             </header>
 
@@ -523,8 +409,7 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
                     <button @click="showAddDeck = true" class="add-deck-btn">+ NUEVO MAZO</button>
                 </div>
                 <div class="decks-layout-grid">
-                    <DeckCard v-for="deck in decks" :key="deck.id" :deck="deck" @click="openDecklist(deck.decklist_url)"
-                        @show-stats="openStats(deck)" />
+                    <DeckCard v-for="deck in decks" :key="deck.id" :deck="deck" @click="openDecklist(deck.decklist_url)" @show-stats="openStats(deck)" />
                     <div v-if="decks.length === 0" class="empty-state-card-mini">No has registrado mazos todavía.</div>
                 </div>
             </section>
@@ -532,8 +417,7 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
             <section class="content-section history-section-spacer">
                 <h2 class="section-title">Últimas Partidas</h2>
                 <div class="history-list">
-                    <button v-for="entry in history" :key="entry.match_id" class="history-item-btn"
-                        @click="goToMatch(entry.match_id)">
+                    <button v-for="entry in history" :key="entry.match_id" class="history-item-btn" @click="goToMatch(entry.match_id)">
                         <div class="h-date">{{ formatDate(entry.matches.fecha_partida) }}</div>
                         <div class="h-main">
                             <span class="h-deck">{{ entry.deck_name_manual || 'Mazo sin nombre' }}</span>
@@ -549,69 +433,36 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
             </section>
         </div>
 
-        <div v-if="showAddDeck || showEditAvatar || showDeckStats || showExportModal" class="modal-overlay"
-            @click.self="showAddDeck = false; showEditAvatar = false; showDeckStats = false; showExportModal = false">
+        <div v-if="showAddDeck || showEditAvatar || showDeckStats || showExportModal" class="modal-overlay" @click.self="showAddDeck = false; showEditAvatar = false; showDeckStats = false; showExportModal = false">
             
             <div v-if="showExportModal" class="modal-content glass-modal export-selection-modal fade-in-up">
                 <div class="modal-header">
                     <h3>GESTIONAR DATOS (CSV)</h3>
                     <button @click="showExportModal = false" class="close-btn-styled">✕</button>
                 </div>
-                
                 <p class="modal-intro-text">¿Qué deseas hacer con tus registros de partidas?</p>
-                
                 <div class="export-options-grid">
-                    <div class="format-action-card">
-                        <span class="opt-icon">👑</span>
-                        <span class="opt-title">Commander</span>
+                    <div class="format-action-card" v-for="fmt in ['commander', 'pauper']" :key="fmt">
+                        <span class="opt-icon">{{ fmt === 'commander' ? '👑' : '🛡️' }}</span>
+                        <span class="opt-title">{{ fmt.charAt(0).toUpperCase() + fmt.slice(1) }}</span>
                         <div class="action-buttons-row">
-                            <button @click="downloadCSV('commander')" class="btn-mini-action export">Exportar</button>
-                            <button @click="triggerImport('commander')" class="btn-mini-action import">Importar</button>
-                        </div>
-                    </div>
-
-                    <div class="format-action-card">
-                        <span class="opt-icon">🛡️</span>
-                        <span class="opt-title">Pauper</span>
-                        <div class="action-buttons-row">
-                            <button @click="downloadCSV('pauper')" class="btn-mini-action export">Exportar</button>
-                            <button @click="triggerImport('pauper')" class="btn-mini-action import">Importar</button>
+                            <button @click="downloadCSV(fmt)" class="btn-mini-action export">Exportar</button>
+                            <button @click="triggerImport(fmt)" class="btn-mini-action import">Importar</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div v-if="showDeckStats" class="modal-content glass-modal stats-modal-large fade-in-up">
+            <div v-if="showDeckStats && selectedDeckStats" class="modal-content glass-modal stats-modal-large fade-in-up">
                 <div class="modal-header">
-                    <div class="header-titles">
-                        <span class="deck-format-tag">{{ selectedDeckStats.formato }}</span>
-                        <h3>{{ selectedDeckStats.nombre_personalizado }}</h3>
-                    </div>
-                    <button class="close-btn-styled" @click="showDeckStats = false">✕</button>
+                    <h3>ESTADÍSTICAS: {{ selectedDeckStats.nombre_personalizado }}</h3>
+                    <button @click="showDeckStats = false" class="close-btn-styled">✕</button>
                 </div>
-                <div v-if="selectedDeckStats.empty" class="empty-state-stats">Sin registros para este mazo.</div>
+                <div v-if="selectedDeckStats.empty" class="empty-state-stats">No hay partidas registradas con este mazo.</div>
                 <div v-else class="stats-grid-container">
                     <div class="main-metrics">
-                        <div class="metric-card">
-                            <span class="m-val">{{ selectedDeckStats.winRate }}%</span>
-                            <span class="m-lab">Win Rate</span>
-                        </div>
-                        <div class="metric-card">
-                            <span class="m-val">{{ selectedDeckStats.total }}</span>
-                            <span class="m-lab">Partidas</span>
-                        </div>
-                    </div>
-                    <div class="rival-tracking">
-                        <div class="rival-row nemesis">
-                            <span class="r-tag">NÉMESIS</span>
-                            <span class="r-name">{{ selectedDeckStats.nemesis[0] || '---' }}</span>
-                            <span class="r-count" v-if="selectedDeckStats.nemesis[0]">x{{ selectedDeckStats.nemesis[1] }}</span>
-                        </div>
-                        <div class="rival-row victim">
-                            <span class="r-tag">VÍCTIMA</span>
-                            <span class="r-name">{{ selectedDeckStats.victim[0] || '---' }}</span>
-                            <span class="r-count" v-if="selectedDeckStats.victim[0]">x{{ selectedDeckStats.victim[1] }}</span>
-                        </div>
+                        <div class="metric-card"><span class="m-val">{{ selectedDeckStats.winRate }}%</span><span class="m-lab">Win Rate</span></div>
+                        <div class="metric-card"><span class="m-val">{{ selectedDeckStats.total }}</span><span class="m-lab">Partidas</span></div>
                     </div>
                 </div>
             </div>
@@ -622,41 +473,24 @@ async function handleLogout() { await supabase.auth.signOut(); router.push('/') 
                     <button @click="showAddDeck = false" class="close-btn-styled">✕</button>
                 </div>
                 <div class="magic-form">
-                    <div class="input-group"><label>Nombre del mazo</label><input v-model="newDeck.nombre_personalizado"
-                            class="magic-input" /></div>
+                    <div class="input-group"><label>Nombre del mazo</label><input v-model="newDeck.nombre_personalizado" class="magic-input" /></div>
                     <div class="grid-2-col">
-                        <div class="input-group"><label>Formato</label>
+                        <div class="input-group">
+                            <label>Formato</label>
                             <select v-model="newDeck.formato" class="magic-input">
                                 <option value="commander">Commander</option>
                                 <option value="pauper">Pauper</option>
                             </select>
                         </div>
-                        <div class="input-group"><label>Colores</label>
+                        <div class="input-group">
+                            <label>Colores</label>
                             <div class="color-picker-mini">
-                                <button v-for="c in colorOptions" :key="c.code" @click="toggleColor(c.code)"
-                                    :class="['color-btn', { active: newDeck.color_identity.includes(c.code) }]">{{
-                                        c.symbol }}</button>
+                                <button v-for="c in colorOptions" :key="c.code" @click="toggleColor(c.code)" :class="['color-btn', { active: newDeck.color_identity.includes(c.code) }]">{{ c.symbol }}</button>
                             </div>
                         </div>
                     </div>
-                    <div v-if="newDeck.formato === 'commander'" class="input-group"><label>Nombre del
-                            Comandante</label><input v-model="newDeck.comandante_nombre"
-                            class="magic-input gold-border" /></div>
-                    <div v-if="newDeck.formato === 'pauper'" class="input-group"><label>Arquetipo</label><input
-                            v-model="newDeck.arquetipo_pauper" class="magic-input blue-border" /></div>
-                    <div class="input-group"><label>Imagen (URL)</label><input v-model="newDeck.image_url"
-                            class="magic-input" /></div>
                     <button @click="createDeck" class="btn-submit-magic" :disabled="isSubmitting">REGISTRAR MAZO</button>
                 </div>
-            </div>
-
-            <div v-if="showEditAvatar" class="modal-content glass-modal fade-in-up">
-                <div class="modal-header">
-                    <h3>EDITAR AVATAR</h3><button @click="showEditAvatar = false" class="close-btn-styled">✕</button>
-                </div>
-                <div class="input-group"><label>URL Imagen</label><input v-model="newAvatarUrl" class="magic-input" />
-                </div>
-                <button @click="updateAvatar" class="btn-submit-magic" :disabled="isSubmitting">GUARDAR</button>
             </div>
         </div>
     </div>
