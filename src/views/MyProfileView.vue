@@ -1316,102 +1316,107 @@ html {
 }
 
 /* ===========================================
-   MODAL: NUEVO MAZO (Mejorado)
+   OPTIMIZACIÓN PARA MÓVIL (NUEVO MAZO)
    =========================================== */
-.add-deck-modal {
-    max-width: 550px !important;
-}
 
-.magic-form {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-}
-
-.input-group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.input-group label {
-    font-size: 0.7rem;
-    font-weight: 800;
-    color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-left: 4px;
-}
-
-.grid-2-col {
-    display: grid;
-    grid-template-columns: 1fr 1.5fr;
-    gap: 15px;
-}
-
-/* Rediseño de los inputs para que no se vean "rotos" */
-.magic-input {
-    background: #1e293b !important;
-    border: 1.5px solid #334155 !important;
-    padding: 12px 16px !important;
-    border-radius: 14px !important;
-    color: white !important;
-    margin-bottom: 0 !important;
-    /* Quitamos el margen para usar el gap del form */
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.magic-input:focus {
-    outline: none;
-    border-color: #3b82f6 !important;
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
-}
-
-/* Mejora del selector de colores */
-.color-picker-mini {
-    background: rgba(15, 23, 42, 0.5);
-    padding: 12px;
-    border-radius: 16px;
-    border: 1px solid #334155;
-    justify-content: space-around;
-}
-
-.color-btn {
-    width: 42px !important;
-    height: 42px !important;
-    font-size: 1.2rem !important;
-    border-radius: 12px !important;
-    /* Más estilo carta */
-    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.color-btn:hover {
-    filter: grayscale(0.5);
-    transform: translateY(-2px);
-}
-
-.color-btn.active {
-    filter: grayscale(0) !important;
-    opacity: 1 !important;
-    border-color: #3b82f6 !important;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-}
-
-.btn-submit-magic {
-    margin-top: 10px;
-    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
-    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
-}
-
-.btn-submit-magic:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* Ajuste móvil para el grid del formulario */
 @media (max-width: 480px) {
+
+    /* 1. Ajuste general del contenedor del modal */
+    .glass-modal.add-deck-modal {
+        padding: 15px !important;
+        /* Reducimos padding lateral y vertical */
+        border-radius: 20px !important;
+        max-height: 95vh;
+        /* Permitimos que use casi toda la pantalla */
+    }
+
+    /* 2. Cabecera más pequeña */
+    .modal-header {
+        margin-bottom: 12px !important;
+    }
+
+    .modal-header h3 {
+        font-size: 0.9rem !important;
+        letter-spacing: 1px;
+    }
+
+    /* 3. Compactar el formulario y grupos de input */
+    .magic-form {
+        gap: 10px !important;
+        /* Espacio mínimo entre filas */
+    }
+
+    .input-group {
+        gap: 2px !important;
+        /* Espacio mínimo entre label e input */
+    }
+
+    .input-group label {
+        font-size: 0.6rem !important;
+        margin-left: 2px !important;
+    }
+
+    /* 4. Forzar disposición horizontal en Formato/Comandante */
     .grid-2-col {
-        grid-template-columns: 1fr;
+        grid-template-columns: 100px 1fr !important;
+        /* Ancho fijo para formato */
+        gap: 8px !important;
+    }
+
+    /* 5. Inputs y Selects ultra-compactos */
+    .magic-input {
+        padding: 8px 12px !important;
+        font-size: 0.8rem !important;
+        border-radius: 10px !important;
+        height: 38px !important;
+        /* Altura fija para consistencia */
+    }
+
+    /* 6. Selector de colores: Minimalista */
+    .color-picker-mini {
+        padding: 6px !important;
+        gap: 4px !important;
+        background: rgba(15, 23, 42, 0.8) !important;
+        border-radius: 12px !important;
+        justify-content: center !important;
+    }
+
+    .color-btn {
+        width: 30px !important;
+        height: 30px !important;
+        font-size: 0.8rem !important;
+        border-radius: 6px !important;
+        border-width: 1px !important;
+    }
+
+    .color-btn.active {
+        transform: scale(1.05) !important;
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.4) !important;
+    }
+
+    /* 7. Botón de registro */
+    .btn-submit-magic {
+        padding: 10px !important;
+        font-size: 0.75rem !important;
+        margin-top: 5px !important;
+        border-radius: 10px !important;
     }
 }
+
+/* Ajuste adicional para móviles muy cortos (como iPhone SE o similares) */
+@media (max-height: 700px) and (max-width: 480px) {
+    .glass-modal.add-deck-modal {
+        padding: 12px !important;
+    }
+
+    .magic-form {
+        gap: 6px !important;
+    }
+
+    .magic-input {
+        height: 34px !important;
+        padding: 6px 10px !important;
+    }
+}
+
 </style>
