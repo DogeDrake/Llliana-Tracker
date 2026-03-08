@@ -48,7 +48,23 @@ const stats = reactive({
     winRate: 0
 })
 
-// --- LÓGICA DE EXPORTACIÓN CSV ---
+// --- NUEVA FUNCIÓN: BUSCAR ID POR NOMBRE ---
+const findUserIdByUsername = async (username) => {
+    if (!username || ['anónimo', 'invitado', 'oponente'].includes(username.toLowerCase())) return null;
+
+    // Quitamos posibles display_names entre paréntesis si el CSV viene del exportador
+    const cleanName = username.split('(')[0].trim();
+
+    const { data } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('username', cleanName)
+        .maybeSingle();
+
+    return data ? data.id : null;
+}
+
+// --- LÓGICA DE EXPORTACIÓN CSV (Sin cambios) ---
 const downloadCSV = async (selectedFormat) => {
     try {
         showExportModal.value = false;
@@ -67,7 +83,7 @@ const downloadCSV = async (selectedFormat) => {
             .in('match_id', matchIds);
 
         const SEP = ",";
-        let csvContent = "\uFEFF"; 
+        let csvContent = "\uFEFF";
 
         csvContent += `--- SECCION: MIS MAZOS (${selectedFormat.toUpperCase()}) ---\n`;
         csvContent += `Nombre${SEP}Comandante/Arquetipo${SEP}Colores\n`;
@@ -114,7 +130,7 @@ const downloadCSV = async (selectedFormat) => {
             const soloFecha = new Date(match.matches.fecha_partida).toLocaleDateString('es-ES');
             let rowArray = [soloFecha, myDeck, isWin ? "VICTORIA" : "DERROTA"];
             for (let i = 0; i < maxOpponents; i++) {
-                if (opponentsData[i]) { rowArray.push(opponentsData[i].name, opponentsData[i].deck); } 
+                if (opponentsData[i]) { rowArray.push(opponentsData[i].name, opponentsData[i].deck); }
                 else { rowArray.push("", ""); }
             }
             rowArray.push(`${currentDeckWinrate}%`, `${currentGlobalWinrate}%`);
@@ -130,7 +146,7 @@ const downloadCSV = async (selectedFormat) => {
     } catch (err) { alert("No se pudo generar el CSV"); }
 }
 
-// --- LÓGICA DE IMPORTACIÓN CSV ---
+// --- LÓGICA DE IMPORTACIÓN ACTUALIZADA ---
 const triggerImport = (format) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -147,21 +163,21 @@ const processImport = async (event, selectedFormat) => {
     reader.onload = async (e) => {
         const content = e.target.result;
         const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
-        
+
         const rows = lines.map(line => {
-                const columns = [];
-                let current = '';
-                let inQuotes = false;
-                for (let char of line) {
-                    if (char === '"') inQuotes = !inQuotes;
-                    else if (char === ',' && !inQuotes) {
-                        columns.push(current.trim());
-                        current = '';
-                    } else current += char;
-                }
-                columns.push(current.trim());
-                return columns.map(col => col.replace(/^"|"$/g, '').replace(/""/g, '"'));
-            })
+            const columns = [];
+            let current = '';
+            let inQuotes = false;
+            for (let char of line) {
+                if (char === '"') inQuotes = !inQuotes;
+                else if (char === ',' && !inQuotes) {
+                    columns.push(current.trim());
+                    current = '';
+                } else current += char;
+            }
+            columns.push(current.trim());
+            return columns.map(col => col.replace(/^"|"$/g, '').replace(/""/g, '"'));
+        })
             .filter(row => row.length > 5 && row[0].toLowerCase() !== 'fecha');
 
         if (rows.length === 0) {
@@ -177,45 +193,56 @@ const processImport = async (event, selectedFormat) => {
                 const fechaStr = row[0];
                 if (!fechaStr) continue;
 
+                // Formateo de fecha DD/MM/YYYY a YYYY-MM-DD
                 const [d, m, y] = fechaStr.split('/');
                 const fechaISO = `${y}-${m}-${d}`;
 
-                // 1. Crear la Partida (Asegurando creator_id según tu schema)
+                // 1. Crear la Partida
                 const { data: matchData, error: mErr } = await supabase
                     .from('matches')
-                    .insert([{ 
-                        fecha_partida: fechaISO, 
+                    .insert([{
+                        fecha_partida: fechaISO,
                         formato: selectedFormat,
-                        creator_id: profile.value.id 
+                        creator_id: profile.value.id
                     }])
                     .select().single();
 
                 if (mErr) throw mErr;
 
-                // 2. Participantes
+                // 2. Preparar participantes
                 const participants = [];
-                const ganadorTexto = row[9];
+                // El ganador se determina comparando con la columna de Resultado (row[2]) 
+                // o buscando si alguien coincide con un campo de ganador si lo tienes
+                const winnerText = row[2];
 
+                // AÑADIRTE A TI (Siempre vinculado)
                 participants.push({
                     match_id: matchData.id,
                     player_name_manual: profile.value.username,
-                    deck_name_manual: row[2],
-                    is_winner: row[11]?.toUpperCase() === 'VICTORIA',
+                    deck_name_manual: row[1],
+                    is_winner: winnerText.toUpperCase() === 'VICTORIA',
                     user_id: profile.value.id
                 });
 
-                [[3, 4], [5, 6], [7, 8]].forEach(([nameIdx, deckIdx]) => {
+                // AÑADIR RIVALES (Buscando sus IDs)
+                const rivalCols = [[3, 4], [5, 6], [7, 8]];
+                for (const [nameIdx, deckIdx] of rivalCols) {
                     const rName = row[nameIdx];
                     const rDeck = row[deckIdx];
-                    if (rName || rDeck) {
+
+                    if (rName) {
+                        // BUSCAMOS SI EL RIVAL EXISTE EN LA PLATAFORMA
+                        const linkedId = await findUserIdByUsername(rName);
+
                         participants.push({
                             match_id: matchData.id,
-                            player_name_manual: rName || 'Oponente',
+                            player_name_manual: rName,
                             deck_name_manual: rDeck || 'Desconocido',
-                            is_winner: (ganadorTexto === rName || ganadorTexto === rDeck) && ganadorTexto !== ""
+                            is_winner: winnerText.toUpperCase() === 'DERROTA', // Lógica simple: si tú pierdes, ellos ganan (ajustar si es multiplayer)
+                            user_id: linkedId // Aquí se guarda el ID si se encontró
                         });
                     }
-                });
+                }
 
                 const { error: pErr } = await supabase.from('match_participants').insert(participants);
                 if (pErr) throw pErr;
