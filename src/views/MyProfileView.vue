@@ -181,7 +181,7 @@ const processImport = async (event, selectedFormat) => {
             .filter(row => row.length > 5 && row[0].toLowerCase() !== 'fecha');
 
         if (rows.length === 0) {
-            alert("No se encontraron partidas válidas en el CSV.");
+            alert("No se encontraron partidas válidas.");
             return;
         }
 
@@ -190,13 +190,17 @@ const processImport = async (event, selectedFormat) => {
 
         try {
             for (const row of rows) {
+                // Índices basados en tu CSV:
+                // [0] Fecha, [1] ID (saltar), [2] Mi mazo, [3] Rival 1, [4] Mazo Rival 1... 
+                // [9] Mazo Ganador, [11] Resultado
+
                 const fechaStr = row[0];
                 if (!fechaStr) continue;
 
-                // Formateo de fecha DD/MM/YYYY a YYYY-MM-DD
-                const [d, m, y] = row[0].split('/');
+                const [d, m, y] = fechaStr.split('/');
                 const fechaISO = `${y}-${m}-${d}`;
 
+                // 1. Crear la Partida principal
                 const { data: matchData, error: mErr } = await supabase
                     .from('matches')
                     .insert([{
@@ -208,34 +212,35 @@ const processImport = async (event, selectedFormat) => {
 
                 if (mErr) throw mErr;
 
-                // 2. Preparar participantes
                 const participants = [];
-                const nombreGanador = row[9]; // Columna "Ganador"
+                const mazoGanadorStr = row[9]?.trim();
+                const miMazoStr = row[2]?.trim();
 
-                // TU PERFIL
+                // 2. AÑADIRTE A TI
                 participants.push({
                     match_id: matchData.id,
                     player_name_manual: profile.value.username,
-                    deck_name_manual: row[2], // <--- CAMBIADO: Antes era row[1], ahora es row[2] para saltar el ID
-                    is_winner: row[11]?.toUpperCase() === 'VICTORIA', // Columna "Resultado"
+                    deck_name_manual: miMazoStr,
+                    // Ganas si "Mi mazo" coincide con el ganador o si el resultado es VICTORIA
+                    is_winner: mazoGanadorStr === miMazoStr || row[11]?.toUpperCase() === 'VICTORIA',
                     user_id: profile.value.id
                 });
 
-                // RIVALES (Índices ajustados a tu CSV: Rival 1 es col 3, Rival 2 es col 5...)
-                const rivalCols = [[3, 4], [5, 6], [7, 8]];
-                for (const [nameIdx, deckIdx] of rivalCols) {
-                    const rName = row[nameIdx];
-                    const rDeck = row[deckIdx];
+                // 3. AÑADIR RIVALES (Rival 1: col 3-4, Rival 2: col 5-6, Rival 3: col 7-8)
+                const rivalIndices = [[3, 4], [5, 6], [7, 8]];
+                for (const [nameIdx, deckIdx] of rivalIndices) {
+                    const rName = row[nameIdx]?.trim();
+                    const rDeck = row[deckIdx]?.trim();
 
-                    if (rName && rName !== "") {
+                    if (rName) {
                         const linkedId = await findUserIdByUsername(rName);
 
                         participants.push({
                             match_id: matchData.id,
                             player_name_manual: rName,
                             deck_name_manual: rDeck || 'Desconocido',
-                            // Ganador por nombre o porque tú perdiste (si es 1 vs 1)
-                            is_winner: rName === nombreGanador,
+                            // El rival gana si su mazo es el que aparece en la columna "Mazo Ganador"
+                            is_winner: rDeck === mazoGanadorStr && rDeck !== "",
                             user_id: linkedId
                         });
                     }
@@ -245,7 +250,7 @@ const processImport = async (event, selectedFormat) => {
                 if (pErr) throw pErr;
                 importedCount++;
             }
-            alert(`¡Éxito! Se han importado ${importedCount} partidas.`);
+            alert(`¡Éxito! Se han importado ${importedCount} partidas vinculando ganadores por mazo.`);
             showExportModal.value = false;
             await fetchStatsAndHistory(profile.value.id, profile.value.username);
         } catch (err) {
