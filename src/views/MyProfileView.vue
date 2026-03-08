@@ -609,7 +609,7 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
                     <button @click="showExportModal = false" class="close-btn-styled">✕</button>
                 </div>
                 <p class="modal-intro-text">Gestiona tus registros de partidas.</p>
-                <div class="export-options-grid export-options-stack">
+                <div class="export-options-stack">
                     <div class="format-action-card" v-for="fmt in ['commander', 'pauper']" :key="fmt">
                         <div class="card-info-side">
                             <span class="opt-icon">{{ fmt === 'commander' ? '👑' : '🛡️' }}</span>
@@ -627,6 +627,7 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
 </template>
 
 <style scoped>
+/* --- BASE & LAYOUT --- */
 .profile-view-root {
     min-height: 100vh;
     color: white;
@@ -692,12 +693,15 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     margin-bottom: 35px;
 }
 
-/* CORRECCIÓN AVATAR: Se añade flex-shrink y se ajusta el tamaño en móvil */
+/* --- CORRECCIÓN AVATAR: ASPECT-RATIO & FLEX --- */
 .avatar-wrapper {
     position: relative;
     width: 100px;
     height: 100px;
     flex-shrink: 0;
+    /* Impide que el flexbox lo deforme */
+    aspect-ratio: 1 / 1;
+    /* Garantiza cuadratura */
     cursor: pointer;
 }
 
@@ -719,6 +723,7 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     width: 100%;
     height: 100%;
     object-fit: cover;
+    /* Evita que la foto se estire */
 }
 
 .avatar-circle {
@@ -760,7 +765,7 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     letter-spacing: 1px;
 }
 
-/* --- STATS RÁPIDAS --- */
+/* --- QUICK STATS --- */
 .quick-stats-row {
     display: flex;
     gap: 12px;
@@ -791,7 +796,7 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     font-weight: 800;
 }
 
-/* --- SECCIONES & MAZOS --- */
+/* --- BIBLIOTECA & HISTORIAL --- */
 .section-header-bar {
     display: flex;
     justify-content: space-between;
@@ -805,7 +810,6 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     text-transform: uppercase;
     letter-spacing: 1.5px;
     color: #94a3b8;
-    margin-bottom: 0;
 }
 
 .add-deck-btn {
@@ -817,7 +821,6 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     font-size: 0.65rem;
     border: none;
     cursor: pointer;
-    transition: 0.2s;
 }
 
 .decks-layout-grid {
@@ -826,7 +829,6 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     gap: 20px;
 }
 
-/* --- HISTORIAL (RESTABLECIDO) --- */
 .history-section-spacer {
     margin-top: 60px;
 }
@@ -906,7 +908,7 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     opacity: 1;
 }
 
-/* --- MODALES & FORMULARIOS --- */
+/* --- MODALES --- */
 .modal-overlay {
     position: fixed;
     inset: 0;
@@ -926,6 +928,8 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     width: 100%;
     border: 1px solid rgba(59, 130, 246, 0.2);
     max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
 .modal-header {
@@ -970,99 +974,9 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     cursor: pointer;
 }
 
-/* --- STATS MODAL --- */
-.stats-modal-large {
-    max-width: 450px !important;
-}
-
-.deck-format-tag {
-    font-size: 0.6rem;
-    font-weight: 900;
-    color: #3b82f6;
-    text-transform: uppercase;
-}
-
-.stats-grid-container {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-
-.main-metrics {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-}
-
-.metric-card {
-    background: rgba(255, 255, 255, 0.03);
-    padding: 20px;
-    border-radius: 18px;
-    text-align: center;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.m-val {
-    display: block;
-    font-size: 1.8rem;
-    font-weight: 900;
-    color: #3b82f6;
-}
-
-.m-lab {
-    font-size: 0.65rem;
-    color: #64748b;
-    text-transform: uppercase;
-    font-weight: 800;
-}
-
-.rival-tracking {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.rival-row {
-    display: flex;
-    align-items: center;
-    padding: 12px 18px;
-    border-radius: 14px;
-    background: rgba(0, 0, 0, 0.2);
-}
-
-.r-tag {
-    font-size: 0.55rem;
-    font-weight: 900;
-    padding: 3px 8px;
-    border-radius: 4px;
-    margin-right: 12px;
-}
-
-.nemesis .r-tag {
-    background: #f87171;
-    color: #450a0a;
-}
-
-.victim .r-tag {
-    background: #34d399;
-    color: #064e3b;
-}
-
-.r-name {
-    flex: 1;
-    font-weight: 700;
-    font-size: 0.9rem;
-}
-
-.r-count {
-    font-size: 0.7rem;
-    color: #64748b;
-    font-weight: 800;
-}
-
-/* --- CORRECCIÓN MODAL CSV --- */
+/* --- CORRECCIÓN MODAL CSV: RESPONSIVIDAD TOTAL --- */
 .export-selection-modal {
-    max-width: 550px !important;
+    max-width: 500px !important;
 }
 
 .export-options-stack {
@@ -1073,13 +987,13 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
 
 .format-action-card {
     background: rgba(30, 41, 59, 0.5);
-    padding: 20px;
+    padding: 16px 20px;
     border-radius: 18px;
     border: 1px solid rgba(59, 130, 246, 0.2);
     display: flex;
     justify-content: space-between;
-    /* Empuja contenido a los extremos */
     align-items: center;
+    gap: 15px;
 }
 
 .card-info-side {
@@ -1088,24 +1002,28 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     gap: 12px;
 }
 
+.opt-title {
+    font-weight: 900;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+}
+
 .action-buttons-row {
     display: flex;
     gap: 8px;
     flex-shrink: 0;
+    /* Evita que los botones se encojan */
 }
 
 .btn-mini-action {
-    padding: 10px 14px;
+    padding: 8px 16px;
     border-radius: 8px;
     font-size: 0.65rem;
     font-weight: 900;
     text-transform: uppercase;
     cursor: pointer;
     border: none;
-    min-width: 90px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    transition: 0.2s;
 }
 
 .btn-mini-action.export {
@@ -1114,12 +1032,12 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
 }
 
 .btn-mini-action.import {
-    background: rgba(16, 185, 129, 0.2);
+    background: rgba(16, 185, 129, 0.1);
     color: #10b981;
     border: 1px solid #10b981;
 }
 
-/* --- OTROS ESTILOS --- */
+/* --- OTROS ELEMENTOS --- */
 .mobile-nav-pills {
     display: flex;
     gap: 10px;
@@ -1168,39 +1086,43 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     transform: scale(1.1);
 }
 
-/* --- RESPONSIVE ADAPTATIONS --- */
+/* --- MEDIA QUERIES --- */
 @media (max-width: 768px) {
     .hero-section {
         gap: 15px;
     }
 
+    /* Asegurar círculo perfecto en móvil */
     .avatar-wrapper {
-        width: 80px;
-        height: 80px;
+        width: 75px;
+        height: 75px;
     }
 
     .username-title {
-        font-size: 1.8rem;
+        font-size: 1.7rem;
     }
 
+    /* Ajuste Modal CSV en móvil */
     .format-action-card {
         flex-direction: column;
-        /* En móvil apilamos para que no se salga el texto */
         align-items: stretch;
+        padding: 15px;
         text-align: center;
     }
 
     .card-info-side {
         justify-content: center;
-        margin-bottom: 10px;
     }
 
     .action-buttons-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
         width: 100%;
     }
 
     .btn-mini-action {
-        flex: 1;
+        width: 100%;
+        padding: 12px 5px;
     }
 
     .horizontal-scroll-mobile {
@@ -1217,7 +1139,7 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     }
 
     .glass-modal {
-        padding: 20px;
+        padding: 25px 20px;
     }
 }
 
@@ -1280,5 +1202,216 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
 
 html {
     scroll-behavior: smooth;
+}
+
+/* ===========================================
+   MODAL: ESTADÍSTICAS DEL MAZO (Recuperado)
+   =========================================== */
+.stats-modal-large {
+    max-width: 600px !important;
+    background: linear-gradient(160deg, #0f172a 0%, #1e293b 100%);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.header-titles .deck-format-tag {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    font-size: 0.6rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 900;
+    text-transform: uppercase;
+    display: inline-block;
+    margin-bottom: 4px;
+}
+
+.stats-grid-container {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.main-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.metric-card {
+    background: rgba(2, 6, 23, 0.4);
+    padding: 20px;
+    border-radius: 20px;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+}
+
+.m-val {
+    font-size: 2rem;
+    font-weight: 900;
+    color: #3b82f6;
+    line-height: 1;
+}
+
+.m-lab {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-top: 8px;
+}
+
+.rival-tracking {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.rival-row {
+    display: flex;
+    align-items: center;
+    padding: 12px 18px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+}
+
+.rival-row.nemesis {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.rival-row.victim {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.r-tag {
+    font-size: 0.6rem;
+    font-weight: 900;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-right: 12px;
+}
+
+.nemesis .r-tag {
+    background: #ef4444;
+    color: white;
+}
+
+.victim .r-tag {
+    background: #10b981;
+    color: white;
+}
+
+.r-name {
+    font-weight: 700;
+    flex: 1;
+}
+
+.r-count {
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+
+/* ===========================================
+   MODAL: NUEVO MAZO (Mejorado)
+   =========================================== */
+.add-deck-modal {
+    max-width: 550px !important;
+}
+
+.magic-form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.input-group label {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: 4px;
+}
+
+.grid-2-col {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 15px;
+}
+
+/* Rediseño de los inputs para que no se vean "rotos" */
+.magic-input {
+    background: #1e293b !important;
+    border: 1.5px solid #334155 !important;
+    padding: 12px 16px !important;
+    border-radius: 14px !important;
+    color: white !important;
+    margin-bottom: 0 !important;
+    /* Quitamos el margen para usar el gap del form */
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.magic-input:focus {
+    outline: none;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+}
+
+/* Mejora del selector de colores */
+.color-picker-mini {
+    background: rgba(15, 23, 42, 0.5);
+    padding: 12px;
+    border-radius: 16px;
+    border: 1px solid #334155;
+    justify-content: space-around;
+}
+
+.color-btn {
+    width: 42px !important;
+    height: 42px !important;
+    font-size: 1.2rem !important;
+    border-radius: 12px !important;
+    /* Más estilo carta */
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.color-btn:hover {
+    filter: grayscale(0.5);
+    transform: translateY(-2px);
+}
+
+.color-btn.active {
+    filter: grayscale(0) !important;
+    opacity: 1 !important;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.btn-submit-magic {
+    margin-top: 10px;
+    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+}
+
+.btn-submit-magic:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Ajuste móvil para el grid del formulario */
+@media (max-width: 480px) {
+    .grid-2-col {
+        grid-template-columns: 1fr;
+    }
 }
 </style>
