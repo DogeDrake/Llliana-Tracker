@@ -418,7 +418,13 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
                     <span class="brand">LILLIANA TRACKER</span>
                     <div class="header-actions">
                         <button @click="showExportModal = true" class="export-btn" title="Gestionar Datos CSV">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
                             Datos
                         </button>
                         <button @click="handleLogout" class="logout-btn">Cerrar Sesión</button>
@@ -441,27 +447,40 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
                 </div>
 
                 <div class="quick-stats-row">
-                    <div class="q-stat"><span class="q-num">{{ decks.length }}</span><span class="q-label">Mazos</span></div>
-                    <div class="q-stat"><span class="q-num">{{ stats.totalMatches }}</span><span class="q-label">Partidas</span></div>
-                    <div class="q-stat"><span class="q-num">{{ stats.winRate }}%</span><span class="q-label">Win Rate</span></div>
+                    <div class="q-stat"><span class="q-num">{{ decks.length }}</span><span class="q-label">Mazos</span>
+                    </div>
+                    <div class="q-stat"><span class="q-num">{{ stats.totalMatches }}</span><span
+                            class="q-label">Partidas</span></div>
+                    <div class="q-stat"><span class="q-num">{{ stats.winRate }}%</span><span class="q-label">Win
+                            Rate</span></div>
+                </div>
+
+                <div class="mobile-nav-pills">
+                    <a href="#biblioteca" class="pill-link">Mazos</a>
+                    <a href="#historial" class="pill-link">Historial</a>
                 </div>
             </header>
 
-            <section class="content-section">
+            <section id="biblioteca" class="content-section">
                 <div class="section-header-bar">
                     <h2 class="section-title">Biblioteca de Mazos</h2>
                     <button @click="showAddDeck = true" class="add-deck-btn">+ NUEVO MAZO</button>
                 </div>
-                <div class="decks-layout-grid">
-                    <DeckCard v-for="deck in decks" :key="deck.id" :deck="deck" @click="openDecklist(deck.decklist_url)" @show-stats="openStats(deck)" />
-                    <div v-if="decks.length === 0" class="empty-state-card-mini">No has registrado mazos todavía.</div>
+                <div class="decks-scroll-viewport">
+                    <div class="decks-layout-grid">
+                        <DeckCard v-for="deck in decks" :key="deck.id" :deck="deck"
+                            @click="openDecklist(deck.decklist_url)" @show-stats="openStats(deck)" />
+                        <div v-if="decks.length === 0" class="empty-state-card-mini">No has registrado mazos todavía.
+                        </div>
+                    </div>
                 </div>
             </section>
 
-            <section class="content-section history-section-spacer">
+            <section id="historial" class="content-section history-section-spacer">
                 <h2 class="section-title">Últimas Partidas</h2>
                 <div class="history-list">
-                    <button v-for="entry in history" :key="entry.match_id" class="history-item-btn" @click="goToMatch(entry.match_id)">
+                    <button v-for="entry in history" :key="entry.match_id" class="history-item-btn"
+                        @click="goToMatch(entry.match_id)">
                         <div class="h-date">{{ formatDate(entry.matches.fecha_partida) }}</div>
                         <div class="h-main">
                             <span class="h-deck">{{ entry.deck_name_manual || 'Mazo sin nombre' }}</span>
@@ -477,171 +496,203 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
             </section>
         </div>
 
-        <div v-if="showAddDeck || showEditAvatar || showDeckStats || showExportModal" class="modal-overlay" @click.self="showAddDeck = false; showEditAvatar = false; showDeckStats = false; showExportModal = false">
-            
+        <div v-if="showAddDeck || showEditAvatar || showDeckStats || showExportModal" class="modal-overlay"
+            @click.self="closeModals">
+
             <div v-if="showExportModal" class="modal-content glass-modal export-selection-modal fade-in-up">
                 <div class="modal-header">
                     <h3>GESTIONAR DATOS (CSV)</h3>
                     <button @click="showExportModal = false" class="close-btn-styled">✕</button>
                 </div>
                 <p class="modal-intro-text">Gestiona tus registros de partidas.</p>
-                <div class="export-options-grid">
-                    <div class="format-action-card" v-for="fmt in ['commander', 'pauper']" :key="fmt">
-                        <span class="opt-icon">{{ fmt === 'commander' ? '👑' : '🛡️' }}</span>
-                        <span class="opt-title">{{ fmt.toUpperCase() }}</span>
-                        <div class="action-buttons-row">
-                            <button @click="downloadCSV(fmt)" class="btn-mini-action export">Exportar</button>
-                            <button @click="triggerImport(fmt)" class="btn-mini-action import">Importar</button>
+                <div class="export-stack">
+                    <div class="data-row-card" v-for="fmt in ['commander', 'pauper']" :key="fmt">
+                        <div class="data-info">
+                            <span class="data-icon">{{ fmt === 'commander' ? '👑' : '🛡️' }}</span>
+                            <span class="data-name">{{ fmt.toUpperCase() }}</span>
+                        </div>
+                        <div class="data-actions">
+                            <button @click="downloadCSV(fmt)" class="btn-data exp">Exportar</button>
+                            <button @click="triggerImport(fmt)" class="btn-data imp">Importar</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div v-if="showDeckStats && selectedDeckStats" class="modal-content glass-modal stats-modal-large fade-in-up">
-                <div class="modal-header">
-                    <h3>ESTADÍSTICAS: {{ selectedDeckStats.nombre_personalizado }}</h3>
-                    <button @click="showDeckStats = false" class="close-btn-styled">✕</button>
-                </div>
-                <div v-if="selectedDeckStats.empty" class="empty-state-stats">No hay partidas registradas con este mazo.</div>
-                <div v-else class="stats-grid-container">
-                    <div class="main-metrics">
-                        <div class="metric-card"><span class="m-val">{{ selectedDeckStats.winRate }}%</span><span class="m-lab">Win Rate</span></div>
-                        <div class="metric-card"><span class="m-val">{{ selectedDeckStats.total }}</span><span class="m-lab">Partidas</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <div v-if="showAddDeck" class="modal-content glass-modal add-deck-modal fade-in-up">
-                <div class="modal-header">
-                    <h3>FORJAR NUEVO MAZO</h3>
-                    <button @click="showAddDeck = false" class="close-btn-styled">✕</button>
-                </div>
-                <div class="magic-form">
-                    <div class="input-group">
-                        <label>Nombre Personalizado</label>
-                        <input v-model="newDeck.nombre_personalizado" class="magic-input" placeholder="Ej: Mi Mazo Pro" />
-                    </div>
-                    
-                    <div class="grid-2-col">
-                        <div class="input-group">
-                            <label>Formato</label>
-                            <select v-model="newDeck.formato" class="magic-input">
-                                <option value="commander">Commander</option>
-                                <option value="pauper">Pauper</option>
-                            </select>
-                        </div>
-                        <div class="input-group">
-                            <label v-if="newDeck.formato === 'commander'">Comandante</label>
-                            <label v-else>Arquetipo</label>
-                            <input v-if="newDeck.formato === 'commander'" v-model="newDeck.comandante_nombre" class="magic-input" placeholder="Nombre de la carta..." />
-                            <input v-else v-model="newDeck.arquetipo_pauper" class="magic-input" placeholder="Ej: Burn, Elves..." />
-                        </div>
-                    </div>
-
-                    <div class="input-group">
-                        <label>URL Decklist (Moxfield, Archidekt...)</label>
-                        <input v-model="newDeck.decklist_url" class="magic-input" placeholder="https://..." />
-                    </div>
-
-                    <div class="input-group">
-                        <label>URL Imagen Arte (Para la portada)</label>
-                        <input v-model="newDeck.image_url" class="magic-input" placeholder="https://.../art.jpg" />
-                    </div>
-
-                    <div class="input-group">
-                        <label>Colores / Identidad</label>
-                        <div class="color-picker-mini">
-                            <button v-for="c in colorOptions" :key="c.code" @click="toggleColor(c.code)" :class="['color-btn', { active: newDeck.color_identity.includes(c.code) }]">{{ c.symbol }}</button>
-                        </div>
-                    </div>
-                    
-                    <button @click="createDeck" class="btn-submit-magic" :disabled="isSubmitting">
-                        {{ isSubmitting ? 'FORJANDO...' : 'REGISTRAR MAZO' }}
-                    </button>
-                </div>
-            </div>
-
-            <div v-if="showEditAvatar" class="modal-content glass-modal edit-avatar-modal fade-in-up">
-                <div class="modal-header">
-                    <h3>SINTONIZAR AVATAR</h3>
-                    <button @click="showEditAvatar = false" class="close-btn-styled">✕</button>
-                </div>
-                <div class="magic-form">
-                    <div class="input-group">
-                        <label>URL de Imagen</label>
-                        <input v-model="newAvatarUrl" class="magic-input" placeholder="https://..." />
-                    </div>
-                    <button @click="updateAvatar" class="btn-submit-magic" :disabled="isSubmitting">ACTUALIZAR APARIENCIA</button>
-                </div>
-            </div>
         </div>
     </div>
 </template>
 
 <style scoped>
+/* ESTILOS BASE */
 .profile-view-root {
     min-height: 100vh;
     color: white;
-    padding-bottom: 120px;
+    padding-bottom: 80px;
+    /* Reducido de 120px */
     font-family: 'Inter', sans-serif;
+    background: #020617;
 }
 
 .relative-content {
     max-width: 1000px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 15px;
+    /* Reducido de 20px */
 }
 
-/* HEADER */
-.top-bar {
+/* MEJORA 1: NAVEGACIÓN MÓVIL */
+.mobile-nav-pills {
+    display: none;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.pill-link {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #60a5fa;
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-decoration: none;
+    text-transform: uppercase;
+}
+
+/* MEJORA 2: SCROLL HORIZONTAL (Escritorio por defecto) */
+.decks-layout-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+/* MEJORA 3: MODAL STACK */
+.export-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.data-row-card {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    padding: 15px;
+    border-radius: 16px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 30px;
 }
 
-.header-actions {
-    display: flex;
-    gap: 10px;
-}
-
-.brand {
-    font-weight: 900;
-    color: #3b82f6;
-    letter-spacing: 2px;
-    font-size: 0.75rem;
-}
-
-.export-btn {
-    background: rgba(59, 130, 246, 0.15);
-    border: 1px solid rgba(59, 130, 246, 0.3);
-    color: #60a5fa;
-    padding: 6px 14px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 0.7rem;
-    font-weight: 800;
+.data-info {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 12px;
+}
+
+.data-icon {
+    font-size: 1.2rem;
+}
+
+.data-name {
+    font-weight: 900;
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+    color: white;
+}
+
+.data-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-data {
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    border: none;
+    cursor: pointer;
+    text-transform: uppercase;
     transition: 0.2s;
 }
 
-.export-btn:hover {
+.btn-data.exp {
     background: #3b82f6;
     color: white;
 }
 
-.logout-btn {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #94a3b8;
-    padding: 6px 14px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 0.7rem;
+.btn-data.imp {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid #10b981;
 }
 
+/* OPTIMIZACIÓN DE FUENTES (MEJORA 4) */
+.username-title {
+    font-size: 1.8rem;
+    /* Reducido de 2.2rem */
+    font-weight: 900;
+    margin: 0;
+    letter-spacing: -1px;
+}
+
+.section-title {
+    font-size: 0.75rem;
+    /* Reducido de 0.85rem */
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #94a3b8;
+}
+
+/* RESPONSIVE MÓVIL (APLICACIÓN DE LAS MEJORAS) */
+@media (max-width: 768px) {
+    .mobile-nav-pills {
+        display: flex;
+    }
+
+    /* Scroll horizontal de mazos */
+    .decks-scroll-viewport {
+        margin: 0 -15px;
+        overflow-x: auto;
+        padding: 0 15px 15px;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .decks-layout-grid {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 15px;
+        width: max-content;
+    }
+
+    .decks-layout-grid>* {
+        width: 270px;
+        scroll-snap-align: center;
+        flex-shrink: 0;
+    }
+
+    .hero-section {
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+
+    .avatar-wrapper {
+        width: 80px;
+        height: 80px;
+    }
+
+    .q-num {
+        font-size: 1.1rem;
+    }
+
+    .history-item-btn {
+        grid-template-columns: 70px 1fr auto;
+        padding: 12px 15px;
+    }
+}
 .hero-section {
     display: flex;
     align-items: center;
