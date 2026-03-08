@@ -124,7 +124,7 @@ async function saveMatch() {
         const toSave = activeParticipants.map((p, index) => ({
             match_id: matchData.id,
             user_id: p.user_id,
-            player_name_manual: p.name || 'Anónimo',
+            player_name_manual: p.name || 'Otro',
             deck_id: p.deck_id && p.deck_id !== 'manual' ? p.deck_id : null,
             deck_name_manual: p.deck_name || 'Mazo desconocido',
             is_winner: index === winnerIndex.value,
