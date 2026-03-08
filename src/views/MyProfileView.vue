@@ -497,13 +497,13 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
 </template>
 
 <style scoped>
-/* 1. ESTRUCTURA Y BASE */
+/* --- BASE Y ESTRUCTURA --- */
 .profile-view-root {
     min-height: 100vh;
     color: white;
     padding-bottom: 120px;
     font-family: 'Inter', sans-serif;
-    background: #020617; /* Fondo ultra oscuro tipo Magic */
+    background: #020617; /* Asegurando el fondo oscuro original */
 }
 
 .relative-content {
@@ -512,11 +512,7 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     padding: 20px;
 }
 
-/* 2. HEADER Y TOP BAR */
-.profile-main-header {
-    margin-bottom: 40px;
-}
-
+/* --- HEADER / TOP BAR --- */
 .top-bar {
     display: flex;
     justify-content: space-between;
@@ -537,7 +533,6 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     gap: 10px;
 }
 
-/* BOTONES DE ACCIÓN */
 .export-btn {
     background: rgba(59, 130, 246, 0.15);
     border: 1px solid rgba(59, 130, 246, 0.3);
@@ -574,7 +569,7 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     color: #f87171;
 }
 
-/* 3. HERO SECTION (AVATAR Y NOMBRE) */
+/* --- HERO SECTION (AVATAR Y USER) --- */
 .hero-section {
     display: flex;
     align-items: center;
@@ -589,7 +584,8 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     cursor: pointer;
 }
 
-.avatar-image-container, .avatar-circle {
+.avatar-image-container,
+.avatar-circle {
     width: 100%;
     height: 100%;
     border-radius: 50%;
@@ -653,16 +649,16 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     letter-spacing: 1.5px;
 }
 
-/* 4. QUICK STATS */
+/* --- QUICK STATS (FILA SUPERIOR) --- */
 .quick-stats-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
     gap: 12px;
     padding: 20px 0;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .q-stat {
+    flex: 1;
     background: rgba(30, 41, 59, 0.3);
     padding: 15px;
     border-radius: 16px;
@@ -684,7 +680,7 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     font-weight: 800;
 }
 
-/* 5. SECCIONES Y GRIDS */
+/* --- SECCIONES Y GRIDS --- */
 .section-header-bar {
     display: flex;
     justify-content: space-between;
@@ -724,7 +720,7 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     gap: 20px;
 }
 
-/* 6. HISTORIAL DE PARTIDAS */
+/* --- HISTORIAL DE PARTIDAS --- */
 .history-section-spacer { margin-top: 60px; }
 
 .history-list {
@@ -750,13 +746,13 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
 }
 
 .history-item-btn:hover {
-    background: rgba(59, 130, 246, 0.08);
+    background: rgba(59, 130, 246, 0.1);
+    transform: translateX(8px);
 }
 
 .h-date { font-size: 0.75rem; color: #64748b; font-weight: 600; }
-.h-main { display: flex; flex-direction: column; }
-.h-deck { font-weight: 800; color: #f1f5f9; font-size: 0.95rem; }
-.h-format { font-size: 0.65rem; color: #3b82f6; text-transform: uppercase; font-weight: 900; letter-spacing: 0.5px; }
+.h-deck { font-weight: 800; color: #f1f5f9; font-size: 0.95rem; display: block; }
+.h-format { font-size: 0.65rem; color: #3b82f6; text-transform: uppercase; font-weight: 900; }
 
 .h-result {
     font-size: 0.7rem;
@@ -773,7 +769,7 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
 .h-arrow { opacity: 0; transition: 0.2s; transform: translateX(-5px); }
 .history-item-btn:hover .h-arrow { opacity: 1; transform: translateX(0); }
 
-/* 7. MODALES (GLASSMORPHISM) */
+/* --- MODALES (ESTILO GLASSMORPHISM COMPLETO) --- */
 .modal-overlay {
     position: fixed;
     inset: 0;
@@ -796,21 +792,14 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     position: relative;
     max-height: 90vh;
     overflow-y: auto;
+    max-width: 500px;
 }
 
 .modal-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: 25px;
-}
-
-.modal-header h3 {
-    font-size: 1rem;
-    font-weight: 900;
-    letter-spacing: 1px;
-    color: #f1f5f9;
-    margin: 0;
 }
 
 .close-btn-styled {
@@ -829,56 +818,7 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
 
 .close-btn-styled:hover { background: rgba(239, 68, 68, 0.2); color: #f87171; }
 
-/* EXPORT / IMPORT UI */
-.format-action-card {
-    background: rgba(30, 41, 59, 0.5);
-    padding: 20px;
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-.action-buttons-row {
-    display: flex;
-    gap: 10px;
-}
-
-.btn-mini-action {
-    flex: 1;
-    padding: 10px;
-    border-radius: 10px;
-    font-size: 0.65rem;
-    font-weight: 900;
-    text-transform: uppercase;
-    cursor: pointer;
-    border: none;
-    transition: 0.2s;
-}
-
-.btn-mini-action.export { background: #3b82f6; color: white; }
-.btn-mini-action.import { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; }
-
-/* COLOR PICKER (DETALLE COMPLETO) */
-.color-picker-mini { display: flex; gap: 6px; flex-wrap: wrap; }
-.color-btn {
-    width: 36px; height: 36px; border-radius: 50%; border: 2px solid #334155;
-    background: #0f172a; cursor: pointer; transition: 0.2s; font-size: 1rem;
-    filter: grayscale(1); opacity: 0.5;
-}
-
-.color-btn.active { filter: grayscale(0); opacity: 1; transform: scale(1.1); }
-/* Colores de maná específicos */
-.color-btn.active:nth-child(1) { border-color: #fef3c7; box-shadow: 0 0 10px #fef3c7; } /* W */
-.color-btn.active:nth-child(2) { border-color: #3b82f6; box-shadow: 0 0 10px #3b82f6; } /* U */
-.color-btn.active:nth-child(3) { border-color: #a855f7; box-shadow: 0 0 10px #a855f7; } /* B */
-.color-btn.active:nth-child(4) { border-color: #ef4444; box-shadow: 0 0 10px #ef4444; } /* R */
-.color-btn.active:nth-child(5) { border-color: #22c55e; box-shadow: 0 0 10px #22c55e; } /* G */
-.color-btn.active:nth-child(6) { border-color: #94a3b8; box-shadow: 0 0 10px #94a3b8; } /* C */
-
-/* INPUTS MAGIC */
+/* --- FORMULARIOS Y COLOR PICKER --- */
 .magic-input {
     background: #1e293b;
     border: 1px solid #334155;
@@ -886,9 +826,12 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     border-radius: 12px;
     color: white;
     width: 100%;
-    margin-bottom: 5px;
+    margin-bottom: 15px;
     font-size: 0.9rem;
+    transition: 0.2s;
 }
+
+.magic-input:focus { border-color: #3b82f6; outline: none; background: #1e293b; }
 
 .input-group label {
     display: block;
@@ -897,34 +840,66 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     text-transform: uppercase;
     color: #64748b;
     margin-bottom: 8px;
+    letter-spacing: 0.5px;
 }
+
+.grid-2-col { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+.color-picker-mini { display: flex; gap: 8px; padding: 10px 0; flex-wrap: wrap; }
+.color-btn {
+    width: 38px; height: 38px; border-radius: 50%; border: 2px solid #334155;
+    background: #1e293b; color: white; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; font-size: 1.1rem;
+    transition: all 0.2s; filter: grayscale(1); opacity: 0.6;
+}
+
+.color-btn.active {
+    filter: grayscale(0); opacity: 1; transform: scale(1.1);
+    background: #1e293b; border-color: #3b82f6; box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
+}
+
+/* Colores de maná específicos al estar activos */
+.color-btn.active:nth-child(1) { border-color: #fef3c7; box-shadow: 0 0 10px #fef3c7; }
+.color-btn.active:nth-child(2) { border-color: #3b82f6; box-shadow: 0 0 10px #3b82f6; }
+.color-btn.active:nth-child(3) { border-color: #a855f7; box-shadow: 0 0 10px #a855f7; }
+.color-btn.active:nth-child(4) { border-color: #ef4444; box-shadow: 0 0 10px #ef4444; }
+.color-btn.active:nth-child(5) { border-color: #22c55e; box-shadow: 0 0 10px #22c55e; }
+.color-btn.active:nth-child(6) { border-color: #94a3b8; box-shadow: 0 0 10px #94a3b8; }
 
 .btn-submit-magic {
     width: 100%;
-    padding: 18px;
+    padding: 16px;
     background: #3b82f6;
+    border-radius: 14px;
     color: white;
     font-weight: 900;
     border: none;
-    border-radius: 14px;
     cursor: pointer;
-    margin-top: 20px;
+    margin-top: 15px;
     transition: 0.3s;
 }
 
-/* 8. RESPONSIVE QUERIES */
-@media (max-width: 768px) {
-    .top-bar { flex-direction: column; gap: 20px; align-items: flex-start; }
-    .header-actions { width: 100%; justify-content: space-between; }
-    .hero-section { flex-direction: column; text-align: center; }
-    .username-title { font-size: 1.8rem; }
-    .quick-stats-row { grid-template-columns: 1fr; gap: 10px; }
-    .grid-2-col { grid-template-columns: 1fr; }
-    .history-item-btn { grid-template-columns: 1fr auto; padding: 15px; }
-    .h-date { grid-column: 1/2; font-size: 0.65rem; }
+.btn-submit-magic:hover { background: #2563eb; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(59, 130, 246, 0.4); }
+
+/* --- EXPORT MODAL UI --- */
+.format-action-card {
+    background: rgba(30, 41, 59, 0.5);
+    padding: 20px;
+    border-radius: 20px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
 }
 
-/* ANIMACIONES */
+.action-buttons-row { display: flex; gap: 8px; width: 100%; }
+.btn-mini-action {
+    flex: 1; padding: 10px; border-radius: 8px; font-size: 0.65rem;
+    font-weight: 900; text-transform: uppercase; cursor: pointer; border: none; transition: 0.2s;
+}
+.btn-mini-action.export { background: #3b82f6; color: white; }
+.btn-mini-action.import { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; }
+
+/* --- ANIMACIONES Y CARGA --- */
 .fade-in { animation: fadeIn 0.5s ease-out; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
@@ -934,15 +909,24 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     to { opacity: 1; transform: translateY(0); }
 }
 
+.loading-overlay {
+    position: fixed; inset: 0; background: #020617;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999;
+}
+
 .spinner {
     width: 40px; height: 40px; border: 4px solid rgba(59, 130, 246, 0.1);
     border-left-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.loading-overlay {
-    position: fixed; inset: 0; background: #020617;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999;
+/* --- RESPONSIVE --- */
+@media (max-width: 768px) {
+    .hero-section { flex-direction: column; text-align: center; }
+    .quick-stats-row { flex-direction: column; }
+    .grid-2-col { grid-template-columns: 1fr; }
+    .history-item-btn { grid-template-columns: 1fr auto; padding: 15px; }
+    .h-date { grid-column: 1 / 3; margin-bottom: 5px; }
+    .export-options-grid { grid-template-columns: 1fr; }
 }
-.invoking-text { margin-top: 15px; font-weight: 800; color: #3b82f6; font-size: 0.8rem; letter-spacing: 2px; }
 </style>
