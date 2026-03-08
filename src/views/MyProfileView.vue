@@ -11,7 +11,7 @@ const profile = ref(null)
 const decks = ref([])
 const history = ref([])
 const loading = ref(true)
-const errorMsg = ref(null) // Para debug si algo falla
+const errorMsg = ref(null)
 const isSubmitting = ref(false)
 
 // Modales
@@ -23,6 +23,7 @@ const showExportModal = ref(false)
 const newAvatarUrl = ref('')
 const selectedDeckStats = ref(null)
 
+// Basado exactamente en tu estructura de tabla 'decks'
 const newDeck = reactive({
     nombre_personalizado: '',
     formato: 'commander',
@@ -145,7 +146,6 @@ const processImport = async (event, selectedFormat) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
         const content = e.target.result;
-        // Parsing más robusto para manejar saltos de línea de Windows (\r\n)
         const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
         
         const rows = lines.map(line => {
@@ -180,10 +180,14 @@ const processImport = async (event, selectedFormat) => {
                 const [d, m, y] = fechaStr.split('/');
                 const fechaISO = `${y}-${m}-${d}`;
 
-                // 1. Crear la Partida
+                // 1. Crear la Partida (Asegurando creator_id según tu schema)
                 const { data: matchData, error: mErr } = await supabase
                     .from('matches')
-                    .insert([{ fecha_partida: fechaISO, formato: selectedFormat }])
+                    .insert([{ 
+                        fecha_partida: fechaISO, 
+                        formato: selectedFormat,
+                        creator_id: profile.value.id 
+                    }])
                     .select().single();
 
                 if (mErr) throw mErr;
@@ -255,7 +259,7 @@ onMounted(async () => {
 
     } catch (err) {
         console.error("Error crítico:", err.message)
-        errorMsg.value = "No se pudo cargar tu perfil. Asegúrate de estar registrado correctamente."
+        errorMsg.value = "No se pudo cargar tu perfil."
     } finally {
         loading.value = false
     }
@@ -327,7 +331,8 @@ const createDeck = async () => {
             user_id: profile.value.id,
             color_identity: newDeck.color_identity.join(','),
             comandante_nombre: newDeck.formato === 'commander' ? newDeck.comandante_nombre : null,
-            arquetipo_pauper: newDeck.formato === 'pauper' ? newDeck.arquetipo_pauper : null
+            arquetipo_pauper: newDeck.formato === 'pauper' ? newDeck.arquetipo_pauper : null,
+            is_active: true
         }
         const { data, error } = await supabase.from('decks').insert([payload]).select()
         if (error) throw error
@@ -440,11 +445,11 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
                     <h3>GESTIONAR DATOS (CSV)</h3>
                     <button @click="showExportModal = false" class="close-btn-styled">✕</button>
                 </div>
-                <p class="modal-intro-text">¿Qué deseas hacer con tus registros de partidas?</p>
+                <p class="modal-intro-text">Gestiona tus registros de partidas.</p>
                 <div class="export-options-grid">
                     <div class="format-action-card" v-for="fmt in ['commander', 'pauper']" :key="fmt">
                         <span class="opt-icon">{{ fmt === 'commander' ? '👑' : '🛡️' }}</span>
-                        <span class="opt-title">{{ fmt.charAt(0).toUpperCase() + fmt.slice(1) }}</span>
+                        <span class="opt-title">{{ fmt.toUpperCase() }}</span>
                         <div class="action-buttons-row">
                             <button @click="downloadCSV(fmt)" class="btn-mini-action export">Exportar</button>
                             <button @click="triggerImport(fmt)" class="btn-mini-action import">Importar</button>
@@ -473,7 +478,11 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
                     <button @click="showAddDeck = false" class="close-btn-styled">✕</button>
                 </div>
                 <div class="magic-form">
-                    <div class="input-group"><label>Nombre del mazo</label><input v-model="newDeck.nombre_personalizado" class="magic-input" /></div>
+                    <div class="input-group">
+                        <label>Nombre Personalizado</label>
+                        <input v-model="newDeck.nombre_personalizado" class="magic-input" placeholder="Ej: Mi Mazo Pro" />
+                    </div>
+                    
                     <div class="grid-2-col">
                         <div class="input-group">
                             <label>Formato</label>
@@ -483,13 +492,47 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
                             </select>
                         </div>
                         <div class="input-group">
-                            <label>Colores</label>
-                            <div class="color-picker-mini">
-                                <button v-for="c in colorOptions" :key="c.code" @click="toggleColor(c.code)" :class="['color-btn', { active: newDeck.color_identity.includes(c.code) }]">{{ c.symbol }}</button>
-                            </div>
+                            <label v-if="newDeck.formato === 'commander'">Comandante</label>
+                            <label v-else>Arquetipo</label>
+                            <input v-if="newDeck.formato === 'commander'" v-model="newDeck.comandante_nombre" class="magic-input" placeholder="Nombre de la carta..." />
+                            <input v-else v-model="newDeck.arquetipo_pauper" class="magic-input" placeholder="Ej: Burn, Elves..." />
                         </div>
                     </div>
-                    <button @click="createDeck" class="btn-submit-magic" :disabled="isSubmitting">REGISTRAR MAZO</button>
+
+                    <div class="input-group">
+                        <label>URL Decklist (Moxfield, Archidekt...)</label>
+                        <input v-model="newDeck.decklist_url" class="magic-input" placeholder="https://..." />
+                    </div>
+
+                    <div class="input-group">
+                        <label>URL Imagen Arte (Para la portada)</label>
+                        <input v-model="newDeck.image_url" class="magic-input" placeholder="https://.../art.jpg" />
+                    </div>
+
+                    <div class="input-group">
+                        <label>Colores / Identidad</label>
+                        <div class="color-picker-mini">
+                            <button v-for="c in colorOptions" :key="c.code" @click="toggleColor(c.code)" :class="['color-btn', { active: newDeck.color_identity.includes(c.code) }]">{{ c.symbol }}</button>
+                        </div>
+                    </div>
+                    
+                    <button @click="createDeck" class="btn-submit-magic" :disabled="isSubmitting">
+                        {{ isSubmitting ? 'FORJANDO...' : 'REGISTRAR MAZO' }}
+                    </button>
+                </div>
+            </div>
+
+            <div v-if="showEditAvatar" class="modal-content glass-modal edit-avatar-modal fade-in-up">
+                <div class="modal-header">
+                    <h3>SINTONIZAR AVATAR</h3>
+                    <button @click="showEditAvatar = false" class="close-btn-styled">✕</button>
+                </div>
+                <div class="magic-form">
+                    <div class="input-group">
+                        <label>URL de Imagen</label>
+                        <input v-model="newAvatarUrl" class="magic-input" placeholder="https://..." />
+                    </div>
+                    <button @click="updateAvatar" class="btn-submit-magic" :disabled="isSubmitting">ACTUALIZAR APARIENCIA</button>
                 </div>
             </div>
         </div>
