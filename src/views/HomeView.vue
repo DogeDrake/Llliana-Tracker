@@ -29,6 +29,14 @@
                     <p>{{ totalDecks }} registrados</p>
                 </div>
             </router-link>
+            <router-link to="/contador" class="action-card life-counter-card">
+                <div class="action-icon">❤️</div>
+                <div class="action-info">
+                    <h3>Contador de Vidas</h3>
+                    <p>Modo mesa (2-4 jugadores)</p>
+                </div>
+                <div class="card-arrow">→</div>
+            </router-link>
         </section>
 
         <div class="section-divider">
@@ -356,5 +364,41 @@ onMounted(async () => {
     font-size: 2rem;
     margin-bottom: 10px;
     opacity: 0.5;
+}
+
+/* --- ESTILO ESPECÍFICO PARA EL CONTADOR --- */
+.life-counter-card {
+    grid-column: span 2;
+    /* Ocupa las dos columnas */
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(153, 27, 27, 0.1));
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    flex-direction: row !important;
+    /* Icono y texto en horizontal */
+    align-items: center;
+    gap: 20px !important;
+    position: relative;
+}
+
+.life-counter-card:hover {
+    border-color: rgba(239, 68, 68, 0.5);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.life-counter-card .action-icon {
+    font-size: 1.8rem;
+    background: rgba(239, 68, 68, 0.2);
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 15px;
+}
+
+.card-arrow {
+    position: absolute;
+    right: 20px;
+    color: rgba(239, 68, 68, 0.5);
+    font-weight: bold;
 }
 </style>

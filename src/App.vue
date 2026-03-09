@@ -68,9 +68,17 @@ import { useRoute } from 'vue-router'
 const route = useRoute()
 
 const isNavVisible = computed(() => {
+  // 1. Si la ruta no tiene nombre aún (carga inicial), ocultamos
   if (!route.name) return false
+
+  // 2. Si en el router.js pusimos meta: { showNav: false }, ocultamos
+  // Esto hará que el contador (LifeCounter) oculte el menú automáticamente
+  if (route.meta && route.meta.showNav === false) return false
+
+  // 3. Mantenemos tu lógica de seguridad por si acaso
   const hiddenRoutes = ['Login', 'Register']
   const isHidden = hiddenRoutes.includes(route.name)
+
   return !isHidden
 })
 </script>
@@ -99,14 +107,6 @@ body {
   /* Fallback oscuro */
   color: #f8fafc;
   font-family: 'Inter', sans-serif;
-}
-
-/* 2. CONTENEDOR PRINCIPAL */
-#app-container {
-  width: 100%;
-  min-height: 100vh;
-  padding-bottom: 110px;
-  box-sizing: border-box;
 }
 
 /* 3. NAVEGACIÓN MODERNA */

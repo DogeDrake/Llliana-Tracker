@@ -6,7 +6,7 @@ const routes = [
     path: "/login",
     name: "Login",
     component: () => import("../views/LoginView.vue"),
-    meta: { requiresAuth: false }, // Claridad absoluta
+    meta: { requiresAuth: false },
   },
   {
     path: "/register",
@@ -42,7 +42,7 @@ const routes = [
     path: "/partida/:id",
     name: "PartidaDetalles",
     component: () => import("../views/PartidaDetalles.vue"),
-    props: true, // Esto permite recibir el ID como prop
+    props: true,
     meta: { requiresAuth: true, showNav: true },
   },
   {
@@ -55,7 +55,7 @@ const routes = [
     path: "/profile/:username",
     name: "Profile",
     component: () => import("../views/UserProfileView.vue"),
-    meta: { requiresAuth: true, showNav: true }, // Asumo que prefieres que estén logueados
+    meta: { requiresAuth: true, showNav: true },
   },
   {
     path: "/mi-perfil",
@@ -63,7 +63,14 @@ const routes = [
     component: () => import("../views/MyProfileView.vue"),
     meta: { requiresAuth: true, showNav: true },
   },
-  // RUTA DE CAPTURA DE ERRORES (Evita el 404 si el router se pierde)
+  // --- NUEVA RUTA: CONTADOR DE VIDAS ---
+  {
+    path: "/contador",
+    name: "LifeCounter",
+    component: () => import("../views/LifeCounterView.vue"),
+    meta: { requiresAuth: true, showNav: false }, // Ocultamos nav para maximizar espacio en mesa
+  },
+  // -------------------------------------
   {
     path: "/:pathMatch(.*)*",
     redirect: { name: "Home" },
@@ -71,31 +78,25 @@ const routes = [
 ];
 
 const router = createRouter({
-  // Aseguramos que el history tome correctamente la base de GitHub Pages
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
 });
 
 /**
- * GUARDIA DE SEGURIDAD CORREGIDA
+ * GUARDIA DE SEGURIDAD
  */
 router.beforeEach(async (to, from, next) => {
   const {
     data: { session },
   } = await supabase.auth.getSession();
+
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
 
-  // 1. Si la ruta requiere auth y NO hay sesión
   if (requiresAuth && !session) {
-    // Usamos el path exacto para evitar problemas de resolución de nombres en subcarpetas
     next("/login");
-  }
-  // 2. Si hay sesión e intenta ir a login/register
-  else if (session && (to.name === "Login" || to.name === "Register")) {
+  } else if (session && (to.name === "Login" || to.name === "Register")) {
     next("/");
-  }
-  // 3. En cualquier otro caso, adelante
-  else {
+  } else {
     next();
   }
 });
