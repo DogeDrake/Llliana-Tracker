@@ -3,24 +3,14 @@
 
 <head>
     <meta charset="utf-8">
-    <title>Lilliana Tracker</title>
-    <script type="text/javascript">
-        // Este script toma la URL que dio el 404 y la guarda como un parámetro de consulta
-        // Luego redirige al index.html principal
-        var pathSegmentsToKeep = 1; // Pon 1 si tu base es /Lilliana-Tracker/
-
-        var l = window.location;
-        l.replace(
-            l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
-            l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?p=/' +
-            l.pathname.split('/').slice(1 + pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
-            (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
-            l.hash
-        );
+    <title>Redirect</title>
+    <script>
+        const path = window.location.pathname;
+        const redirect = "/Lilliana-Tracker/" + "#" + path.replace("/Lilliana-Tracker", "");
+        window.location.replace(redirect);
     </script>
 </head>
 
-<body>
-</body>
+<body></body>
 
 </html>
