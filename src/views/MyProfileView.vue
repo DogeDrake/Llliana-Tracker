@@ -1,10 +1,12 @@
 <script setup>
-import { ref, onMounted, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, reactive, computed, watch } from 'vue' // Asegúrate de importar watch y computed
+import { useRouter, useRoute } from 'vue-router'
+import { isGlobalNavVisible } from '../stores/uiState'
 import { supabase } from '../supabaseClient'
 import DeckCard from '../components/DeckCard.vue'
 
 const router = useRouter()
+const route = useRoute()
 
 // --- ESTADOS ---
 const profile = ref(null)
@@ -293,6 +295,19 @@ const processImport = async (event, selectedFormat) => {
     reader.readAsText(file);
 };
 
+/*Modal Open */
+const isAnyModalOpen = computed(() =>
+    showAddDeck.value ||
+    showEditAvatar.value ||
+    showDeckStats.value ||
+    showExportModal.value
+)
+
+watch(isAnyModalOpen, (open) => {
+    isGlobalNavVisible.value = !open
+})
+
+
 // --- CICLO DE VIDA Y CARGA ---
 
 onMounted(async () => {
@@ -443,7 +458,7 @@ const handleLogout = async () => { await supabase.auth.signOut(); router.push('/
     <div v-else-if="profile" class="profile-view-root">
         <div class="relative-content fade-in">
             <header class="profile-main-header">
-                <nav class="top-bar">
+                <nav v-if="!isAnyModalOpen" class="top-bar">
                     <span class="brand">LILLIANA TRACKER</span>
                     <div class="header-actions">
                         <button @click="showExportModal = true" class="export-btn" title="Gestionar Datos CSV">

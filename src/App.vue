@@ -64,22 +64,19 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { isGlobalNavVisible } from './stores/uiState'
 
 const route = useRoute()
 
 const isNavVisible = computed(() => {
-  // 1. Si la ruta no tiene nombre aún (carga inicial), ocultamos
   if (!route.name) return false
 
-  // 2. Si en el router.js pusimos meta: { showNav: false }, ocultamos
-  // Esto hará que el contador (LifeCounter) oculte el menú automáticamente
-  if (route.meta && route.meta.showNav === false) return false
+  if (route.meta?.showNav === false) return false
 
-  // 3. Mantenemos tu lógica de seguridad por si acaso
+  if (!isGlobalNavVisible.value) return false
+
   const hiddenRoutes = ['Login', 'Register']
-  const isHidden = hiddenRoutes.includes(route.name)
-
-  return !isHidden
+  return !hiddenRoutes.includes(route.name)
 })
 </script>
 
