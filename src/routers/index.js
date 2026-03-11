@@ -6,14 +6,28 @@ const routes = [
     path: "/login",
     name: "Login",
     component: () => import("../views/LoginView.vue"),
-    meta: { requiresAuth: false },
+    meta: { requiresAuth: false, showNav: false },
   },
   {
     path: "/register",
     name: "Register",
     component: () => import("../views/RegisterView.vue"),
-    meta: { requiresAuth: false },
+    meta: { requiresAuth: false, showNav: false },
   },
+  // --- NUEVAS RUTAS DE AUTENTICACIÓN Y RECUPERACIÓN ---
+  {
+    path: "/confirmado",
+    name: "AccountConfirmed",
+    component: () => import("../views/AccountConfirmedView.vue"),
+    meta: { requiresAuth: false, showNav: false },
+  },
+  {
+    path: "/resetear-password",
+    name: "UpdatePassword",
+    component: () => import("../views/UpdatePasswordView.vue"),
+    meta: { requiresAuth: false, showNav: false },
+  },
+  // ---------------------------------------------------
   {
     path: "/",
     name: "Home",
@@ -63,7 +77,7 @@ const routes = [
     component: () => import("../views/MyProfileView.vue"),
     meta: { requiresAuth: true, showNav: true },
   },
-  // --- NUEVA RUTA: CONTADOR DE VIDAS ---
+  // --- RUTA: CONTADOR DE VIDAS ---
   {
     path: "/contador",
     name: "LifeCounter",
@@ -97,6 +111,7 @@ router.beforeEach(async (to, from, next) => {
   } else if (session && (to.name === "Login" || to.name === "Register")) {
     next("/");
   } else {
+    // Permite que las vistas de confirmación y reseteo procesen la sesión temporal
     next();
   }
 });
