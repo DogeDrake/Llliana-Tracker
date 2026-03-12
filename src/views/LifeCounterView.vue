@@ -1,21 +1,20 @@
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { supabase } from '../supabaseClient'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-// --- WAKE LOCK (Mantener pantalla encendida) ---
+// --- WAKE LOCK ---
 const wakeLock = ref(null);
 
 async function requestWakeLock() {
     try {
         if ('wakeLock' in navigator) {
             wakeLock.value = await navigator.wakeLock.request('screen');
-            console.log('Pantalla siempre encendida activada');
         }
     } catch (err) {
-        console.error(`Error al activar Wake Lock: ${err.message}`);
+        console.error(`Error Wake Lock: ${err.message}`);
     }
 }
 
@@ -32,35 +31,27 @@ const handleVisibilityChange = async () => {
     }
 }
 
-onMounted(() => {
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-})
-
-onUnmounted(() => {
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
-    releaseWakeLock();
-});
+onMounted(() => { document.addEventListener('visibilitychange', handleVisibilityChange); })
+onUnmounted(() => { document.removeEventListener('visibilitychange', handleVisibilityChange); releaseWakeLock(); });
 
 // --- ESTADO GLOBAL ---
 const gameStarted = ref(false)
 const gameOver = ref(false)
 const winner = ref(null)
-const format = ref('commander') // 'commander' o 'pauper'
+const format = ref('commander')
 const numPlayers = ref(4)
 const startingLife = ref(40)
 
-// Variables para el sistema de turnos y menús
 const currentPlayerIndex = ref(0)
 const isShuffling = ref(false)
-const activePlayerMenu = ref(null) // ID del jugador que tiene el menú abierto
+const activePlayerMenu = ref(null)
+const activeCommanderMenu = ref(null)
 const loading = ref(false)
 const currentUser = ref(null)
 
-// Lógica para pulsación larga
 const pressTimer = ref(null)
 const isLongPress = ref(false)
 
-// --- CONFIGURACIÓN DE JUGADORES (Setup) ---
 const setupPlayers = ref([
     { name: '', deck_name: '', deck_id: null, user_id: null, suggestions: [], decks: [] },
     { name: '', deck_name: '', deck_id: null, user_id: null, suggestions: [], decks: [] },
@@ -70,7 +61,6 @@ const setupPlayers = ref([
 
 const players = ref([])
 
-// --- CARGA INICIAL (Usuario actual) ---
 onMounted(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (session) {
@@ -84,19 +74,10 @@ onMounted(async () => {
     }
 })
 
-// --- LÓGICA DE BÚSQUEDA Y MAZOS (SUPABASE) ---
 async function handleSearch(index) {
     const term = setupPlayers.value[index].name
-    if (term.length < 3) {
-        setupPlayers.value[index].suggestions = []
-        return
-    }
-    const { data } = await supabase
-        .from('profiles')
-        .select('id, username')
-        .ilike('username', `%${term}%`)
-        .limit(5)
-
+    if (term.length < 3) { setupPlayers.value[index].suggestions = []; return }
+    const { data } = await supabase.from('profiles').select('id, username').ilike('username', `%${term}%`).limit(5)
     setupPlayers.value[index].suggestions = data || []
 }
 
@@ -108,47 +89,29 @@ async function selectPlayer(index, profile) {
 }
 
 async function loadPlayerDecks(index, userId) {
-    const { data } = await supabase
-        .from('decks')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('formato', format.value)
-        .eq('is_active', true)
-
+    const { data } = await supabase.from('decks').select('*').eq('user_id', userId).eq('formato', format.value).eq('is_active', true)
     setupPlayers.value[index].decks = data || []
 }
 
 function onDeckSelect(index) {
     const p = setupPlayers.value[index]
-    if (p.deck_id === 'manual' || !p.deck_id) {
-        p.deck_name = '' // Permitir que escriba su propio mazo
-    } else {
+    if (p.deck_id === 'manual' || !p.deck_id) p.deck_name = ''
+    else {
         const selected = p.decks.find(d => d.id === p.deck_id)
-        if (selected) {
-            p.deck_name = selected.comandante_nombre || selected.nombre_personalizado || selected.arquetipo_pauper
-        }
+        if (selected) p.deck_name = selected.comandante_nombre || selected.nombre_personalizado || selected.arquetipo_pauper
     }
 }
 
-// --- CAMBIO DE FORMATO ---
 function changeFormat(newFormat) {
     format.value = newFormat
     startingLife.value = (newFormat === 'commander') ? 40 : 20
-
     setupPlayers.value.forEach((p, idx) => {
-        if (idx !== 0) {
-            p.name = ''
-            p.user_id = null
-            p.suggestions = []
-        }
-        p.deck_id = null
-        p.deck_name = ''
-        p.decks = []
+        if (idx !== 0) { p.name = ''; p.user_id = null; p.suggestions = [] }
+        p.deck_id = null; p.deck_name = ''; p.decks = [];
         if (p.user_id) loadPlayerDecks(idx, p.user_id)
     })
 }
 
-// --- GESTIÓN DE LA PARTIDA E INICIO ---
 const getPlayerColor = (i) => ['#b91c1c', '#1d4ed8', '#047857', '#b45309'][i]
 
 const startGame = () => {
@@ -156,47 +119,28 @@ const startGame = () => {
     requestWakeLock();
 
     players.value = setupPlayers.value.slice(0, numPlayers.value).map((p, i) => ({
-        id: i + 1,
-        user_id: p.user_id,
-        deck_id: p.deck_id,
+        id: i + 1, user_id: p.user_id, deck_id: p.deck_id,
         name: p.name || `Jugador ${i + 1}`,
         deck_name: p.deck_name || (format.value === 'commander' ? 'Sin Comandante' : 'Mazo Desconocido'),
-        life: startingLife.value,
-        lifeDelta: 0,
-        deltaKey: 0,
-        deltaTimer: null,
-        poison: 0,
-        tax: 0,
-        isMonarch: false,
-        commanderDamage: {},
-        color: getPlayerColor(i),
-        dead: false,
-        puesto: null
+        life: startingLife.value, lifeDelta: 0, deltaKey: 0, deltaTimer: null,
+        poison: 0, tax: 0, isMonarch: false, commanderDamage: {},
+        color: getPlayerColor(i), dead: false, puesto: null,
+        animLight: false, animHeavy: false
     }))
-
-    gameOver.value = false
-    winner.value = null
+    gameOver.value = false; winner.value = null;
     runShuffleAnimation()
 }
 
 const runShuffleAnimation = () => {
     isShuffling.value = true
-    let step = 0
-    const totalSteps = 20 + Math.floor(Math.random() * (numPlayers.value * 4))
-    let currentDelay = 40
-
+    let step = 0; const totalSteps = 15;
     const nextStep = () => {
         currentPlayerIndex.value = (currentPlayerIndex.value + 1) % numPlayers.value
         step++
-
-        if (step < totalSteps) {
-            currentDelay += Math.floor(step / 3)
-            setTimeout(nextStep, currentDelay)
-        } else {
-            isShuffling.value = false
-        }
+        if (step < totalSteps) setTimeout(nextStep, 50 + (step * 5))
+        else isShuffling.value = false
     }
-    setTimeout(nextStep, currentDelay)
+    nextStep()
 }
 
 const getClockwiseOrder = (num) => {
@@ -207,55 +151,53 @@ const getClockwiseOrder = (num) => {
 
 const nextTurn = () => {
     if (isShuffling.value || gameOver.value) return
-
     const order = getClockwiseOrder(numPlayers.value)
-    const currentPosition = order.indexOf(currentPlayerIndex.value)
-    let nextPosition = (currentPosition + 1) % order.length
-    let nextIndex = order[nextPosition]
-
-    let attempts = 0
-    while (players.value[nextIndex].dead && attempts < order.length) {
-        nextPosition = (nextPosition + 1) % order.length
-        nextIndex = order[nextPosition]
-        attempts++
-    }
-    currentPlayerIndex.value = nextIndex
+    let nextPos = (order.indexOf(currentPlayerIndex.value) + 1) % order.length
+    while (players.value[order[nextPos]].dead) nextPos = (nextPos + 1) % order.length
+    currentPlayerIndex.value = order[nextPos]
 }
 
-// --- LÓGICA DE INTERACCIÓN Y MECÁNICAS ---
 const handleTouchStart = (e, i, a) => {
     if (pressTimer.value) clearTimeout(pressTimer.value);
-
     isLongPress.value = false
     pressTimer.value = setTimeout(() => {
         isLongPress.value = true
-        if (navigator.vibrate) navigator.vibrate(40);
+        triggerAnimation(i, a * 10)
         updateLife(i, a * 10)
     }, 450)
 }
 
 const handleTouchEnd = (e, i, a) => {
-    clearTimeout(pressTimer.value)
-    pressTimer.value = null;
-
+    clearTimeout(pressTimer.value); pressTimer.value = null;
     if (!isLongPress.value) {
+        triggerAnimation(i, a)
         updateLife(i, a)
     }
     if (e.cancelable) e.preventDefault();
 }
 
+const triggerAnimation = (i, amount) => {
+    if (amount >= 0) return;
+    const p = players.value[i];
+
+    if (amount <= -5) {
+        p.animHeavy = true;
+        if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+    } else {
+        p.animLight = true;
+        if (navigator.vibrate) navigator.vibrate(30);
+    }
+
+    setTimeout(() => { p.animLight = false; p.animHeavy = false; }, 400);
+}
+
 const updateLife = (i, a) => {
     const p = players.value[i]
     p.life += a
-
     p.lifeDelta += a
     p.deltaKey = Date.now()
     if (p.deltaTimer) clearTimeout(p.deltaTimer)
-
-    p.deltaTimer = setTimeout(() => {
-        p.lifeDelta = 0
-    }, 1200)
-
+    p.deltaTimer = setTimeout(() => { p.lifeDelta = 0 }, 1200)
     checkDeath(i)
 }
 
@@ -265,32 +207,25 @@ const updatePoison = (i, a) => {
     checkDeath(i)
 }
 
-const updateTax = (i, a) => {
-    const p = players.value[i]
-    p.tax = Math.max(0, p.tax + a)
-}
+const updateTax = (i, a) => { players.value[i].tax = Math.max(0, players.value[i].tax + a) }
 
 const updateCommanderDamage = (i, oppId, a) => {
     const p = players.value[i]
     const cur = p.commanderDamage[oppId] || 0
     p.commanderDamage[oppId] = Math.max(0, cur + a)
+    triggerAnimation(i, -a);
     updateLife(i, -a)
 }
 
-const setMonarch = (i) => {
-    players.value.forEach((p, x) => p.isMonarch = x === i)
-}
+const setMonarch = (i) => { players.value.forEach((p, x) => p.isMonarch = x === i) }
 
-// --- MUERTE, VICTORIA Y GUARDADO EN DB ---
 const checkDeath = (i) => {
     const p = players.value[i]
     if (p.dead) return
-
     const cmdrLoss = Object.values(p.commanderDamage).some(d => d >= 21)
     if (p.life <= 0 || p.poison >= 10 || (format.value === 'commander' && cmdrLoss)) {
         p.dead = true
-        const aliveCount = players.value.filter(pl => !pl.dead).length
-        p.puesto = aliveCount + 1
+        p.puesto = players.value.filter(pl => !pl.dead).length + 1
         checkWinner()
     }
 }
@@ -298,10 +233,7 @@ const checkDeath = (i) => {
 const checkWinner = () => {
     const survivors = players.value.filter(p => !p.dead)
     if (survivors.length === 1 && gameStarted.value) {
-        winner.value = survivors[0]
-        winner.value.puesto = 1
-        gameOver.value = true
-        saveMatch()
+        winner.value = survivors[0]; winner.value.puesto = 1; gameOver.value = true; saveMatch()
     }
 }
 
@@ -309,57 +241,28 @@ const saveMatch = async () => {
     if (loading.value) return
     loading.value = true
     try {
-        const { data: matchData, error: matchError } = await supabase
-            .from('matches')
-            .insert([{
-                creator_id: currentUser.value?.id,
-                formato: format.value,
-                is_public: true
-            }])
-            .select().single()
-
-        if (matchError) throw matchError
-
-        const participantsToSave = players.value.map((p) => ({
-            match_id: matchData.id,
-            user_id: p.user_id,
-            player_name_manual: p.user_id ? null : p.name,
-            deck_id: p.deck_id && p.deck_id !== 'manual' ? p.deck_id : null,
-            deck_name_manual: p.deck_name,
-            is_winner: p.puesto === 1,
-            puesto: p.puesto || 1
+        const { data: matchData } = await supabase.from('matches').insert([{ creator_id: currentUser.value?.id, formato: format.value, is_public: true }]).select().single()
+        const parts = players.value.map((p) => ({
+            match_id: matchData.id, user_id: p.user_id, player_name_manual: p.user_id ? null : p.name,
+            deck_id: p.deck_id && p.deck_id !== 'manual' ? p.deck_id : null, deck_name_manual: p.deck_name,
+            is_winner: p.puesto === 1, puesto: p.puesto || 1
         }))
-
-        const { error: partError } = await supabase.from('match_participants').insert(participantsToSave)
-        if (partError) throw partError
-
-        console.log("Partida guardada con éxito")
-    } catch (error) {
-        alert("Error guardando partida: " + error.message)
-    } finally {
-        loading.value = false
-    }
+        await supabase.from('match_participants').insert(parts)
+    } catch (error) { console.error(error) } finally { loading.value = false }
 }
 
 const resetGame = () => {
-    if (confirm("¿Finalizar partida actual y volver al menú?")) {
-        gameStarted.value = false
-        gameOver.value = false
-        releaseWakeLock();
+    if (confirm("¿Finalizar la partida actual?")) {
+        gameStarted.value = false; gameOver.value = false; releaseWakeLock();
     }
-}
-
-const goBack = () => {
-    router.back()
 }
 </script>
 
 <template>
     <div class="life-counter-root">
-
-        <button v-if="!gameStarted" class="back-nav-btn" @click="goBack">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button v-if="!gameStarted" class="back-nav-btn" @click="router.back()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
                 <path d="m15 18-6-6 6-6" />
             </svg>
             Volver
@@ -368,23 +271,18 @@ const goBack = () => {
         <div v-if="!gameStarted" class="setup-screen scrollable">
             <div class="setup-container">
                 <div class="setup-box">
-
-                    <p class="section-label">Formato y Vida</p>
+                    <p class="section-label">Formato</p>
                     <div class="selector-row">
                         <button @click="changeFormat('commander')"
                             :class="{ active: format === 'commander' }">Commander</button>
-
                         <button @click="changeFormat('pauper')" :class="{ active: format === 'pauper' }">Pauper</button>
                     </div>
-
-                    <p class="section-label">Número de Jugadores</p>
+                    <p class="section-label">Jugadores</p>
                     <div class="selector-row">
                         <button v-for="n in [2, 3, 4]" :key="n" @click="numPlayers = n"
                             :class="{ active: numPlayers === n }">{{ n }}</button>
                     </div>
-
                     <hr class="setup-divider" />
-
                     <div class="players-setup-list">
                         <div v-for="i in numPlayers" :key="i" class="player-setup-row">
                             <span class="p-num">P{{ i }}</span>
@@ -393,33 +291,26 @@ const goBack = () => {
                                     <input type="text" v-model="setupPlayers[i - 1].name" @input="handleSearch(i - 1)"
                                         placeholder="Buscar jugador (@username)..."
                                         :disabled="i === 1 && currentUser" />
-
                                     <ul v-if="setupPlayers[i - 1].suggestions.length > 0" class="suggestions-list">
                                         <li v-for="sug in setupPlayers[i - 1].suggestions" :key="sug.id"
-                                            @click="selectPlayer(i - 1, sug)">
-                                            @{{ sug.username }}
-                                        </li>
+                                            @click="selectPlayer(i - 1, sug)">@{{ sug.username }}</li>
                                     </ul>
                                 </div>
-
                                 <select v-if="setupPlayers[i - 1].decks.length > 0"
                                     v-model="setupPlayers[i - 1].deck_id" @change="onDeckSelect(i - 1)"
                                     class="setup-select">
                                     <option :value="null">Seleccionar mazo...</option>
-                                    <option v-for="deck in setupPlayers[i - 1].decks" :key="deck.id" :value="deck.id">
-                                        {{ deck.nombre_personalizado || deck.comandante_nombre }}
-                                    </option>
+                                    <option v-for="deck in setupPlayers[i - 1].decks" :key="deck.id" :value="deck.id">{{
+            deck.nombre_personalizado || deck.comandante_nombre }}</option>
                                     <option value="manual">Otro mazo...</option>
                                 </select>
-
                                 <input
                                     v-if="setupPlayers[i - 1].decks.length === 0 || setupPlayers[i - 1].deck_id === 'manual'"
                                     type="text" v-model="setupPlayers[i - 1].deck_name"
-                                    :placeholder="format === 'commander' ? 'Nombre del Comandante...' : 'Arquetipo del Mazo...'" />
+                                    placeholder="Nombre/Comandante..." />
                             </div>
                         </div>
                     </div>
-
                     <button class="start-btn" @click="startGame">EMPEZAR PARTIDA</button>
                 </div>
             </div>
@@ -430,32 +321,38 @@ const goBack = () => {
                 :style="{ '--player-color': !player.dead ? player.color : '#111' }" :class="{
             'is-dead': player.dead,
             'is-current-turn': currentPlayerIndex === index && !isShuffling && !gameOver,
-            'is-shuffling': isShuffling && currentPlayerIndex === index
+            'is-shuffling': isShuffling && currentPlayerIndex === index,
+            'anim-dmg-light': player.animLight,
+            'anim-dmg-heavy': player.animHeavy
         }">
 
                 <div class="inner-content-rotator">
-                    <div v-if="currentPlayerIndex === index && !gameOver" class="turn-indicator-label">
-                        {{ isShuffling ? '🎲' : 'TU TURNO' }}
-                    </div>
-
                     <div class="interaction-layer">
                         <div class="hitbox minus" @mousedown="handleTouchStart($event, index, -1)"
                             @mouseup="handleTouchEnd($event, index, -1)"
                             @touchstart.passive="handleTouchStart($event, index, -1)"
                             @touchend="handleTouchEnd($event, index, -1)" @contextmenu.prevent>
-                            <span class="visual-op">−</span>
+                            <div class="edge-indicator left">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="3" stroke-linecap="round">
+                                    <path d="M5 12h14" />
+                                </svg>
+                            </div>
                         </div>
-
                         <div class="hitbox plus" @mousedown="handleTouchStart($event, index, 1)"
                             @mouseup="handleTouchEnd($event, index, 1)"
                             @touchstart.passive="handleTouchStart($event, index, 1)"
                             @touchend="handleTouchEnd($event, index, 1)" @contextmenu.prevent>
-                            <span class="visual-op">+</span>
+                            <div class="edge-indicator right">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="3" stroke-linecap="round">
+                                    <path d="M12 5v14M5 12h14" />
+                                </svg>
+                            </div>
                         </div>
                     </div>
 
                     <div class="interface-layer">
-
                         <div class="status-pills-container">
                             <div v-if="player.poison > 0" class="status-pill poison">🧪 {{ player.poison }}</div>
                             <div v-if="player.tax > 0" class="status-pill tax">💎 {{ player.tax }}</div>
@@ -475,81 +372,94 @@ const goBack = () => {
                                 {{ player.lifeDelta > 0 ? '+' : '' }}{{ player.lifeDelta }}
                             </div>
 
-                            <div class="p-info-group">
-                                <span class="p-tag">{{ player.name }}</span>
-                                <span class="p-extra">{{ player.deck_name }}</span>
-                            </div>
-
                             <span v-if="!player.dead" class="p-life">{{ player.life }}</span>
-                            <div v-else class="p-death-msg">
-                                💀
-                                <button @mousedown.stop @touchstart.stop
+                            <div v-else class="p-death-msg">💀<button
                                     @click.stop="player.dead = false; player.life = 1; gameOver = false">REVIVIR</button>
                             </div>
                         </div>
 
-                        <button v-if="!player.dead" class="open-menu-btn" @click.stop="activePlayerMenu = player.id">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                stroke-linejoin="round">
-                                <circle cx="12" cy="12" r="1" />
-                                <circle cx="12" cy="5" r="1" />
-                                <circle cx="12" cy="19" r="1" />
-                            </svg>
-                        </button>
+                        <div class="player-footer">
+                            <div class="p-info-group">
+                                <div v-if="currentPlayerIndex === index && !gameOver" class="turn-indicator-label">
+                                    {{ isShuffling ? '🎲' : 'TU TURNO' }}
+                                </div>
+                                <span class="p-tag">{{ player.name }}</span>
+                                <span class="p-extra">{{ player.deck_name }}</span>
+                            </div>
+
+                            <div class="action-buttons-group">
+                                <button v-if="format === 'commander' && !player.dead" class="tactical-btn combat-btn"
+                                    @click.stop="activeCommanderMenu = player.id">
+                                    ⚔️
+                                </button>
+                                <button v-if="!player.dead" class="tactical-btn settings-btn"
+                                    @click.stop="activePlayerMenu = player.id">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2.5">
+                                        <circle cx="12" cy="12" r="1" />
+                                        <circle cx="5" cy="12" r="1" />
+                                        <circle cx="19" cy="12" r="1" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="activeCommanderMenu === player.id" class="combat-hud-overlay"
+                        @click.self="activeCommanderMenu = null">
+                        <div class="combat-hud-panel">
+                            <div class="combat-header">
+                                <span>DAÑO</span>
+                                <button class="close-hud-btn" @click.stop="activeCommanderMenu = null">✕</button>
+                            </div>
+
+                            <div class="combat-targets-grid">
+                                <div v-for="opp in players.filter(p => p.id !== player.id)" :key="opp.id"
+                                    class="target-column">
+                                    <div class="target-header" :style="{ borderBottomColor: opp.color }">
+                                        <span class="target-name">{{ opp.name }}</span>
+                                    </div>
+                                    <div class="target-stepper-vertical">
+                                        <button class="step-btn plus"
+                                            @click.stop="updateCommanderDamage(index, opp.id, 1)">+</button>
+                                        <span class="step-value"
+                                            :class="{ 'critical': (player.commanderDamage[opp.id] || 0) >= 18 }">
+                                            {{ player.commanderDamage[opp.id] || 0 }}
+                                        </span>
+                                        <button class="step-btn minus"
+                                            @click.stop="updateCommanderDamage(index, opp.id, -1)">-</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div v-if="activePlayerMenu === player.id" class="player-menu-overlay"
                         @click.self="activePlayerMenu = null">
-                        <div class="menu-glass-panel">
-                            <div class="player-accent-bar" :style="{ background: player.color }"></div>
-
-                            <div class="menu-body compact-layout">
-                                <div class="quick-grid">
-                                    <div class="stat-module">
-                                        <span class="module-label">🧪 VENENO</span>
-                                        <div class="module-controls">
-                                            <button class="ctrl-btn" @click.stop="updatePoison(index, -1)">-</button>
-                                            <span class="v-number">{{ player.poison }}</span>
-                                            <button class="ctrl-btn" @click.stop="updatePoison(index, 1)">+</button>
-                                        </div>
-                                    </div>
-
-                                    <div class="stat-module">
-                                        <span class="module-label">💎 TAX</span>
-                                        <div class="module-controls">
-                                            <button class="ctrl-btn" @click.stop="updateTax(index, -2)">-</button>
-                                            <span class="v-number">{{ player.tax }}</span>
-                                            <button class="ctrl-btn" @click.stop="updateTax(index, 2)">+</button>
-                                        </div>
+                        <div class="menu-glass-panel clean-menu">
+                            <div class="menu-top-row">
+                                <div class="stat-module">
+                                    <span class="module-label">🧪 VENENO</span>
+                                    <div class="module-controls">
+                                        <button class="ctrl-btn" @click.stop="updatePoison(index, -1)">-</button>
+                                        <span class="v-number">{{ player.poison }}</span>
+                                        <button class="ctrl-btn" @click.stop="updatePoison(index, 1)">+</button>
                                     </div>
                                 </div>
-
-                                <button class="monarch-action-bar" :class="{ 'is-active': player.isMonarch }"
-                                    @click.stop="setMonarch(index)">
-                                    <span class="crown-icon">👑</span>
-                                    {{ player.isMonarch ? 'MONARCA' : 'RECLAMAR TRONO' }}
-                                </button>
-
-                                <div v-if="format === 'commander'" class="commander-damage-grid">
-                                    <p class="section-tag">DAÑO RECIBIDO</p>
-                                    <div class="damage-scroll-area">
-                                        <div v-for="opp in players.filter(p => p.id !== player.id)" :key="opp.id"
-                                            class="mini-damage-card">
-                                            <div class="opp-indicator" :style="{ backgroundColor: opp.color }"></div>
-                                            <div class="dmg-controls">
-                                                <button
-                                                    @click.stop="updateCommanderDamage(index, opp.id, -1)">-</button>
-                                                <span
-                                                    :class="{ 'critical': (player.commanderDamage[opp.id] || 0) >= 18 }">
-                                                    {{ player.commanderDamage[opp.id] || 0 }}
-                                                </span>
-                                                <button @click.stop="updateCommanderDamage(index, opp.id, 1)">+</button>
-                                            </div>
-                                        </div>
+                                <div class="stat-module">
+                                    <span class="module-label">💎 TAX</span>
+                                    <div class="module-controls">
+                                        <button class="ctrl-btn" @click.stop="updateTax(index, -2)">-</button>
+                                        <span class="v-number">{{ player.tax }}</span>
+                                        <button class="ctrl-btn" @click.stop="updateTax(index, 2)">+</button>
                                     </div>
                                 </div>
                             </div>
+
+                            <button class="monarch-action-bar" :class="{ 'is-active': player.isMonarch }"
+                                @click.stop="setMonarch(index)">
+                                👑 {{ player.isMonarch ? 'MONARCA' : 'RECLAMAR TRONO' }}
+                            </button>
 
                             <button class="menu-done-btn" @click.stop="activePlayerMenu = null">LISTO</button>
                         </div>
@@ -566,9 +476,7 @@ const goBack = () => {
                 <div class="victory-box">
                     <h2>👑 ¡VICTORIA! 👑</h2>
                     <h1 :style="{ color: winner.color }">{{ winner.name }}</h1>
-                    <p>{{ winner.deck_name }}</p>
-                    <p class="db-msg" v-if="!loading">✓ Partida sincronizada con la base de datos</p>
-                    <p class="db-msg" v-else>Guardando partida...</p>
+                    <p class="db-msg" v-if="!loading">✓ Partida guardada</p>
                     <button class="start-btn" @click="resetGame">VOLVER AL MENÚ</button>
                 </div>
             </div>
@@ -586,38 +494,27 @@ const goBack = () => {
     position: fixed;
     inset: 0;
     font-family: system-ui, -apple-system, sans-serif;
-    -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
+    touch-action: manipulation;
 }
 
 .setup-screen input,
 .setup-screen select {
-    -webkit-user-select: text;
     user-select: text;
 }
 
-/* --- ESTILOS DEL SETUP --- */
 .setup-screen {
     height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     background: #0f172a;
-}
-
-.setup-screen.scrollable {
     overflow-y: auto;
-    padding: 20px 0;
 }
 
 .setup-container {
-    padding-top: 60px;
-}
-
-.setup-title {
-    margin-top: 10px;
-    text-align: center;
+    padding-top: 50px;
 }
 
 .setup-box {
@@ -625,7 +522,6 @@ const goBack = () => {
     padding: 20px;
     border-radius: 24px;
     width: 320px;
-    text-align: center;
     max-width: 90vw;
 }
 
@@ -650,7 +546,6 @@ const goBack = () => {
     background: #1e293b;
     color: white;
     font-weight: 800;
-    transition: background 0.2s;
 }
 
 .selector-row button.active {
@@ -699,12 +594,6 @@ const goBack = () => {
     box-sizing: border-box;
 }
 
-.input-group input:focus,
-.setup-select:focus {
-    outline: none;
-    border-color: #3b82f6;
-}
-
 .autocomplete-wrapper {
     position: relative;
     width: 100%;
@@ -718,24 +607,18 @@ const goBack = () => {
     background: #1e293b;
     border: 1px solid #3b82f6;
     border-radius: 6px;
-    margin: 4px 0 0 0;
-    padding: 0;
-    list-style: none;
     z-index: 1000;
     max-height: 120px;
     overflow-y: auto;
+    list-style: none;
+    padding: 0;
+    margin: 4px 0 0 0;
 }
 
 .suggestions-list li {
     padding: 8px 12px;
-    text-align: left;
     cursor: pointer;
-    font-size: 0.9rem;
     border-bottom: 1px solid #334155;
-}
-
-.suggestions-list li:hover {
-    background: #3b82f6;
 }
 
 .start-btn {
@@ -749,7 +632,23 @@ const goBack = () => {
     font-weight: 900;
 }
 
-/* --- TABLERO Y JUEGO --- */
+.back-nav-btn {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 8px 16px 8px 8px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+}
+
 .game-board {
     display: grid;
     width: 100%;
@@ -775,8 +674,7 @@ const goBack = () => {
     position: relative;
     background: var(--player-color);
     overflow: hidden;
-    border: 0.5px solid rgba(0, 0, 0, 0.2);
-    transition: filter 0.2s ease;
+    border: 0.5px solid rgba(0, 0, 0, 0.3);
 }
 
 .inner-content-rotator {
@@ -790,7 +688,6 @@ const goBack = () => {
     flex-direction: column;
 }
 
-/* Orientación de los jugadores según el móvil */
 @media (orientation: portrait) {
 
     .players-4 .player-zone:nth-child(1) .inner-content-rotator,
@@ -825,7 +722,69 @@ const goBack = () => {
     }
 }
 
-/* --- INTERFAZ LIMPIA --- */
+.anim-dmg-light {
+    animation: shakeLight 0.3s ease;
+}
+
+.anim-dmg-heavy {
+    animation: shakeHeavy 0.4s cubic-bezier(.36, .07, .19, .97) both;
+    position: relative;
+}
+
+.anim-dmg-heavy::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 0, 0, 0.4);
+    z-index: 200;
+    pointer-events: none;
+    animation: flashRed 0.4s ease-out;
+}
+
+@keyframes shakeLight {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-3px);
+    }
+
+    75% {
+        transform: translateX(3px);
+    }
+}
+
+@keyframes shakeHeavy {
+
+    0%,
+    100% {
+        transform: translate(0, 0);
+    }
+
+    20%,
+    60% {
+        transform: translate(-8px, 4px);
+    }
+
+    40%,
+    80% {
+        transform: translate(8px, -4px);
+    }
+}
+
+@keyframes flashRed {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
 .interface-layer {
     position: relative;
     z-index: 10;
@@ -833,37 +792,32 @@ const goBack = () => {
     width: 100%;
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
     pointer-events: none;
+    padding: 16px;
     box-sizing: border-box;
 }
 
-/* Píldoras informativas (esquinas/bordes) */
 .status-pills-container {
-    position: absolute;
-    top: 10px;
-    left: 10px;
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 6px;
     z-index: 15;
+    align-items: flex-start;
 }
 
 .status-pill {
     background: rgba(0, 0, 0, 0.5);
     color: #fff;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     font-weight: 800;
     padding: 4px 10px;
     border-radius: 20px;
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    gap: 4px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .status-pill.monarch {
-    background: rgba(234, 179, 8, 0.8);
+    background: #eab308;
     color: #000;
 }
 
@@ -872,48 +826,31 @@ const goBack = () => {
     border-radius: 6px;
 }
 
-/* Centro Absoluto para Vida */
 .life-center {
-    flex: 1;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     display: flex;
     flex-direction: column;
+    align-items: center;
     justify-content: center;
-    align-items: center;
-    position: relative;
-}
-
-.p-info-group {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-bottom: -5px;
-}
-
-.p-tag {
-    font-size: 0.9rem;
-    font-weight: 900;
-    opacity: 0.8;
-    letter-spacing: 1px;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-}
-
-.p-extra {
-    font-size: 0.65rem;
-    opacity: 0.6;
-    font-style: italic;
+    width: 45%;
+    pointer-events: none;
 }
 
 .p-life {
-    font-size: clamp(4rem, 22vh, 12rem);
+    font-size: clamp(4rem, 20vw, 10rem);
     font-weight: 900;
     line-height: 1;
-    text-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    text-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    text-align: center;
 }
 
 .life-delta-indicator {
     position: absolute;
-    top: 10%;
-    font-size: 4rem;
+    top: -30%;
+    font-size: 3.5rem;
     font-weight: 900;
     opacity: 0;
     pointer-events: none;
@@ -942,282 +879,427 @@ const goBack = () => {
     }
 }
 
-/* Botón Minimalista Menú (Puntos) */
-.open-menu-btn {
-    position: absolute;
-    bottom: 15px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.3);
-    border: none;
+.player-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    width: 100%;
+}
+
+.p-info-group {
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto;
+}
+
+.p-tag {
+    font-size: 1.1rem;
+    font-weight: 900;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.p-extra {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    font-style: italic;
+}
+
+.turn-indicator-label {
+    background: #fff;
+    color: #000;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.6rem;
+    font-weight: 900;
+    width: fit-content;
+    margin-bottom: 4px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.action-buttons-group {
+    display: flex;
+    gap: 8px;
+    pointer-events: auto;
+}
+
+.tactical-btn {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     color: white;
-    width: 44px;
-    height: 32px;
-    border-radius: 16px;
+    width: 48px;
+    height: 42px;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    pointer-events: auto;
-    backdrop-filter: blur(5px);
-    transition: background 0.2s;
+    backdrop-filter: blur(8px);
+    transition: transform 0.1s, background 0.2s;
 }
 
-.open-menu-btn:active {
-    background: rgba(0, 0, 0, 0.6);
+.tactical-btn.combat-btn {
+    font-size: 1.2rem;
+    border-color: rgba(248, 113, 113, 0.3);
+    background: rgba(20, 0, 0, 0.6);
 }
 
-/* --- INTERACCIÓN Y BOTONES VISUALES (+/-) --- */
+.tactical-btn:active {
+    background: rgba(0, 0, 0, 0.8);
+    transform: scale(0.92);
+}
+
 .interaction-layer {
     position: absolute;
     inset: 0;
     display: flex;
     z-index: 5;
+    justify-content: space-between;
 }
 
 .hitbox {
-    flex: 1;
+    width: 35%;
+    height: 100%;
     display: flex;
     align-items: center;
-    justify-content: center;
     background: transparent;
 }
 
-.visual-op {
-    font-size: clamp(5rem, 18vw, 10rem);
-    font-weight: 300;
-    opacity: 0.1;
-    pointer-events: none;
-    transition: all 0.2s ease;
+.hitbox.minus {
+    justify-content: flex-start;
 }
 
-.hitbox:active .visual-op {
-    opacity: 0.3;
-    transform: scale(1.2);
+.hitbox.plus {
+    justify-content: flex-end;
+}
+
+.edge-indicator {
+    color: rgba(255, 255, 255, 0.2);
+    width: 40px;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(2px);
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.edge-indicator.left {
+    border-radius: 0 40px 40px 0;
+    border-left: none;
+}
+
+.edge-indicator.right {
+    border-radius: 40px 0 0 40px;
+    border-right: none;
+}
+
+.hitbox:active .edge-indicator {
+    background: rgba(255, 255, 255, 0.25);
+    color: #fff;
+    transform: scaleX(1.3);
 }
 
 .is-dead {
-    filter: grayscale(1) brightness(0.8);
+    filter: grayscale(1) brightness(0.5);
 }
 
 .p-death-msg {
-    position: relative;
     z-index: 50;
     pointer-events: auto;
     text-align: center;
+    font-size: 3rem;
 }
 
 .p-death-msg button {
     margin-top: 10px;
-    padding: 8px 16px;
+    padding: 10px 20px;
     background: #fff;
     color: #000;
     border: none;
-    border-radius: 8px;
+    border-radius: 12px;
     font-weight: 900;
     display: block;
 }
 
-/* --- MODAL ELEGANTE DEL JUGADOR (GLASSMORPHISM) --- */
-.player-menu-overlay {
+/* =========================================================
+   HUD DE COMBATE TÁCTICO (REDUCIDO)
+   ========================================================= */
+.combat-hud-overlay {
     position: absolute;
     inset: 0;
     background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(10px);
+    z-index: 200;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    animation: zoomIn 0.2s ease-out;
+}
+
+@keyframes zoomIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.combat-hud-panel {
+    display: flex;
+    flex-direction: column;
+    width: 95%;
+    max-width: 280px;
+    height: auto;
+    gap: 6px;
+    background: rgba(25, 25, 30, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    padding: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+}
+
+.combat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 4px 4px 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.combat-header span {
+    font-size: 0.55rem;
+    font-weight: 900;
+    color: #f87171;
+    letter-spacing: 1px;
+}
+
+.close-hud-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    color: white;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+}
+
+.combat-targets-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    flex: 1;
+    overflow: hidden;
+}
+
+.target-column {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 2px;
+}
+
+.target-header {
+    padding: 2px;
+    text-align: center;
+    border-bottom: 1px solid transparent;
+}
+
+.target-name {
+    font-size: 0.55rem;
+    font-weight: 800;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    opacity: 0.9;
+}
+
+.target-stepper-vertical {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0;
+}
+
+.target-stepper-vertical .step-btn {
+    width: 90%;
+    height: 32px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: white;
+    font-size: 1.1rem;
+    flex: none;
+}
+
+.target-stepper-vertical .step-btn:active {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(0.92);
+}
+
+.target-stepper-vertical .step-value {
+    font-size: 1.4rem;
+    font-weight: 900;
+    line-height: 1;
+    padding: 2px 0;
+}
+
+.critical {
+    color: #f87171;
+    text-shadow: 0 0 10px rgba(248, 113, 113, 0.4);
+}
+
+/* =========================================================
+   PLAYER MENU OVERLAY (REDUCIDO)
+   ========================================================= */
+.player-menu-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(15px);
     z-index: 100;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 15px;
+    padding: 8px;
     pointer-events: auto;
-    animation: fadeIn 0.2s ease-out;
+    animation: fadeMenu 0.2s ease-out;
+}
+
+@keyframes fadeMenu {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 .menu-glass-panel {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 24px;
-    width: 100%;
-    max-width: 360px;
-    max-height: 95%;
+    background: rgba(20, 20, 25, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    width: 95%;
+    max-width: 260px;
+    height: auto;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-    overflow: hidden;
+    gap: 8px;
+    padding: 12px;
+    box-sizing: border-box;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
 }
 
-.menu-header {
+.clean-menu {
+    align-content: center;
+}
+
+.menu-top-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.stat-module {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 8px;
+    border-radius: 12px;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.module-label {
+    font-size: 0.55rem;
+    font-weight: 800;
+    color: #777;
+    display: block;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.module-controls {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 20px;
-    background: rgba(0, 0, 0, 0.2);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 0 2px;
 }
 
-.menu-header h3 {
-    margin: 0;
-    font-size: 1.1rem;
-    font-weight: 800;
-    color: #fff;
-}
-
-.close-menu-btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    color: #fff;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    font-size: 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.menu-body {
-    padding: 20px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-
-.scrollable-no-bar::-webkit-scrollbar {
-    display: none;
-}
-
-/* Grid de Acciones Rápidas */
-.quick-stats-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
-
-.stat-card {
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 16px;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-}
-
-.stat-card.full-width {
-    grid-column: span 2;
-    padding: 0;
-    background: transparent;
-}
-
-.stat-icon {
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: #cbd5e1;
-    text-transform: uppercase;
-}
-
-.stat-controls {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.btn-math {
-    background: rgba(255, 255, 255, 0.9);
-    color: #000;
-    border: none;
-    border-radius: 10px;
-    width: 40px;
-    height: 40px;
-    font-size: 1.5rem;
+.v-number {
+    font-size: 1.4rem;
     font-weight: 900;
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
-.btn-math.sm {
-    width: 32px;
-    height: 32px;
+.ctrl-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
     font-size: 1.2rem;
+    font-weight: bold;
 }
 
-.btn-math:active {
+.ctrl-btn:active {
+    background: rgba(255, 255, 255, 0.3);
     transform: scale(0.9);
 }
 
-.stat-value {
-    font-size: 1.5rem;
-    font-weight: 900;
-    min-width: 30px;
-    text-align: center;
-}
-
-.btn-monarch-toggle {
+.monarch-action-bar {
     width: 100%;
-    padding: 16px;
-    border-radius: 16px;
-    border: 1px solid rgba(234, 179, 8, 0.3);
-    background: rgba(234, 179, 8, 0.1);
-    color: #fde047;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    color: #ccc;
     font-weight: 900;
-    font-size: 1rem;
+    font-size: 0.8rem;
     transition: all 0.2s;
-}
-
-.btn-monarch-toggle.is-monarch {
-    background: rgba(234, 179, 8, 0.8);
-    color: #000;
-}
-
-/* Daño de Comandante Modal */
-.cmd-dmg-section h4 {
-    margin: 0 0 12px 0;
-    font-size: 0.85rem;
-    color: #94a3b8;
     text-transform: uppercase;
-    text-align: center;
+    letter-spacing: 1px;
 }
 
-.cmd-dmg-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: rgba(0, 0, 0, 0.3);
-    padding: 10px 14px;
-    border-radius: 16px;
-    margin-bottom: 8px;
+.monarch-action-bar.is-active {
+    background: #eab308;
+    color: #000;
+    border-color: #eab308;
+    box-shadow: 0 0 15px rgba(234, 179, 8, 0.3);
 }
 
-.opp-info {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.opp-color-bar {
-    width: 6px;
-    height: 24px;
-    border-radius: 4px;
-}
-
-.opp-name {
-    font-weight: 700;
-    font-size: 0.95rem;
-}
-
-.cmd-score {
+.menu-done-btn {
+    width: 100%;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 2px;
     font-weight: 900;
-    font-size: 1.5rem;
-    min-width: 40px;
-    text-align: center;
+    font-size: 0.9rem;
+    letter-spacing: 1.5px;
+    margin-top: 4px;
 }
 
-.danger {
-    color: #ff4444;
-}
-
-/* ---- ESTILOS PARA EL TURNO Y EL HUB CENTRAL ---- */
+/* --- HUB Y TURNOS --- */
 .center-hub {
     position: absolute;
     top: 50%;
@@ -1225,35 +1307,29 @@ const goBack = () => {
     transform: translate(-50%, -50%);
     display: flex;
     gap: 8px;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 6px;
-    border-radius: 30px;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 8px;
+    border-radius: 40px;
     border: 1px solid rgba(255, 255, 255, 0.2);
     z-index: 150;
     backdrop-filter: blur(10px);
 }
 
 .hub-btn {
-    width: 44px;
-    height: 44px;
+    width: 50px;
+    height: 50px;
     border-radius: 50%;
     border: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.2rem;
-    transition: transform 0.1s ease;
-}
-
-.hub-btn:active {
-    transform: scale(0.9);
+    font-size: 1.4rem;
 }
 
 .pass-btn {
     background: #fff;
     color: #000;
     font-weight: bold;
-    font-size: 1.5rem;
 }
 
 .menu-btn {
@@ -1264,45 +1340,9 @@ const goBack = () => {
 
 .is-current-turn {
     z-index: 20;
-    box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.8);
-    animation: pulse-turn 2s infinite ease-in-out;
+    box-shadow: inset 0 0 0 6px rgba(255, 255, 255, 0.8);
 }
 
-@keyframes pulse-turn {
-
-    0%,
-    100% {
-        box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.3);
-    }
-
-    50% {
-        box-shadow: inset 0 0 0 8px rgba(255, 255, 255, 0.8);
-    }
-}
-
-.is-shuffling {
-    filter: brightness(1.5) saturate(1.5);
-    box-shadow: inset 0 0 0 6px #fff;
-}
-
-.turn-indicator-label {
-    position: absolute;
-    top: 40px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(255, 255, 255, 0.9);
-    color: #000;
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 0.65rem;
-    font-weight: 900;
-    letter-spacing: 1px;
-    z-index: 30;
-    pointer-events: none;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
-}
-
-/* --- OVERLAY DE VICTORIA --- */
 .victory-overlay {
     position: absolute;
     inset: 0;
@@ -1336,217 +1376,14 @@ const goBack = () => {
 }
 
 @keyframes popIn {
-    0% {
+    from {
         transform: scale(0.8);
         opacity: 0;
     }
 
-    100% {
+    to {
         transform: scale(1);
         opacity: 1;
     }
-}
-
-/* Botón de volver posicionado */
-.back-nav-btn {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    z-index: 1000;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: white;
-    padding: 8px 16px 8px 8px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    backdrop-filter: blur(10px);
-}
-
-.back-nav-btn:active {
-    transform: scale(0.95);
-    background: rgba(255, 255, 255, 0.1);
-}
-
-/* --- NUEVA ESTÉTICA DEL MENÚ --- */
-.player-menu-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(8px);
-    z-index: 100;
-    display: flex;
-    align-items: flex-end;
-    /* Aparece desde abajo, más ergonómico */
-    padding: 10px;
-    animation: slideUp 0.3s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-@keyframes slideUp {
-    from {
-        transform: translateY(100%);
-        opacity: 0;
-    }
-
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-
-.menu-glass-panel {
-    background: rgba(20, 20, 25, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 28px;
-    width: 100%;
-    overflow: hidden;
-    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.6);
-}
-
-.player-accent-bar {
-    height: 6px;
-    width: 100%;
-}
-
-.menu-body.compact-layout {
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-
-/* Grid superior */
-.quick-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-}
-
-.stat-module {
-    background: rgba(255, 255, 255, 0.05);
-    padding: 10px;
-    border-radius: 18px;
-    text-align: center;
-}
-
-.module-label {
-    font-size: 0.65rem;
-    font-weight: 800;
-    color: #888;
-    display: block;
-    margin-bottom: 6px;
-}
-
-.module-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.v-number {
-    font-size: 1.4rem;
-    font-weight: 900;
-}
-
-.ctrl-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 12px;
-    border: none;
-    background: #333;
-    color: white;
-    font-size: 1.2rem;
-}
-
-/* Botón Monarca Pro */
-.monarch-action-bar {
-    width: 100%;
-    padding: 14px;
-    border-radius: 16px;
-    border: none;
-    background: rgba(255, 255, 255, 0.05);
-    color: #666;
-    font-weight: 900;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    transition: all 0.3s;
-}
-
-.monarch-action-bar.is-active {
-    background: #eab308;
-    color: #000;
-    box-shadow: 0 0 20px rgba(234, 179, 8, 0.4);
-}
-
-/* Daño Comandante Compacto */
-.section-tag {
-    font-size: 0.65rem;
-    font-weight: 800;
-    color: #555;
-    margin-bottom: 8px;
-    text-align: center;
-}
-
-.damage-scroll-area {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 4px;
-}
-
-.mini-damage-card {
-    flex: 1;
-    min-width: 80px;
-    background: rgba(0, 0, 0, 0.4);
-    border-radius: 14px;
-    padding: 8px;
-}
-
-.opp-indicator {
-    height: 4px;
-    border-radius: 2px;
-    margin-bottom: 6px;
-}
-
-.dmg-controls {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-}
-
-.dmg-controls span {
-    font-weight: 900;
-    font-size: 1.2rem;
-}
-
-.dmg-controls button {
-    width: 100%;
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    color: white;
-    border-radius: 6px;
-    padding: 4px;
-}
-
-.critical {
-    color: #ff4444;
-    text-shadow: 0 0 8px rgba(255, 68, 68, 0.5);
-}
-
-.menu-done-btn {
-    width: 100%;
-    background: #3b82f6;
-    color: white;
-    border: none;
-    padding: 14px;
-    font-weight: 900;
-    font-size: 0.9rem;
-    letter-spacing: 2px;
 }
 </style>
